@@ -13,6 +13,7 @@ obj-$(CONFIG_LEDS_MTK_DISP)		+= leds-mtk-disp.o
 obj-$(CONFIG_LEDS_REGULATOR_VIBRATOR)	+= regulator-vibrator.o
 # Flash and Torch LED Drivers
 obj-$(CONFIG_LEDS_CLASS_FLASH)		+= flash/
+obj-$(CONFIG_LEDS_TRIGGERS)		+= trigger/
 
 # drv add fangduozhu, LRA AW86927FCR bringup, 20250425 start
 obj-$(CONFIG_AWINIC_HAPTIC_HV) += aw_haptic_hv/

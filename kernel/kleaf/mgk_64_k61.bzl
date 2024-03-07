@@ -906,6 +906,9 @@ def get_overlay_modules_list():
         mgk_64_k61_device_modules.append("sound/soc/codecs/aw87xxx/snd-soc-aw87xxx.ko")
         mgk_64_k61_device_modules.append("sound/soc/codecs/hac_gpio.ko")
 
+    if "lineage.config" in DEFCONFIG_OVERLAYS:
+        mgk_64_k61_device_modules.append("drivers/leds/trigger/ledtrig-backlight-drm.ko")
+
     if "fpga.config" in DEFCONFIG_OVERLAYS:
         mgk_64_k61_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus")
         mgk_64_k61_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int")
