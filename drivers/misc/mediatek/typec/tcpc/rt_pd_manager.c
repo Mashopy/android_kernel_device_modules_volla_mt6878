@@ -3,8 +3,9 @@
  * Copyright (c) 2021 MediaTek Inc.
  */
 
-#include <linux/kernel.h>
 #include <linux/module.h>
+#if IS_ENABLED(CONFIG_TCPC_CLASS)
+#include <linux/kernel.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
@@ -15,6 +16,14 @@
 #include "inc/tcpci_typec.h"
 
 #define RT_PD_MANAGER_VERSION	"1.0.11"
+
+static bool dbg_log_en = true;
+module_param(dbg_log_en, bool, 0644);
+#define mt_dbg(dev, fmt, ...) \
+	do { \
+		if (dbg_log_en) \
+			dev_info(dev, "%s " fmt, __func__, ##__VA_ARGS__); \
+	} while(0)
 
 struct rpmd_notifier_block {
 	struct notifier_block nb;
@@ -43,6 +52,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		container_of(nb, struct rpmd_notifier_block, nb);
 	struct rt_pd_manager_data *rpmd = pd_nb->rpmd;
 	int ret = 0, idx = pd_nb - rpmd->pd_nb;
+	int bootmode = rpmd->tcpc[idx]->bootmode;
 	uint8_t old_state = TYPEC_UNATTACHED, new_state = TYPEC_UNATTACHED;
 	enum typec_pwr_opmode opmode = TYPEC_PWR_MODE_USB;
 	uint16_t pd_revision = 0x0316;
@@ -50,17 +60,16 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 	struct typec_displayport_data dp_data = {.status = 0, .conf = 0};
 	struct typec_mux_state state = {.mode = 0, .data = &dp_data};
 
-	dev_info(rpmd->dev, "%s event = %lu, idx = %d\n", __func__, event, idx);
-
+	mt_dbg(rpmd->dev, "event = %lu, idx = %d\n", event, idx);
 	switch (event) {
 	case TCP_NOTIFY_VBUS_SHORT_CC:
-		if (noti->vsc_status.short_status)
-			dev_info(rpmd->dev,
-				 "%s enter short status, short_cc = %s\n",
-				 __func__, noti->vsc_status.short_cc ==
-				 TCPC_POLARITY_CC1 ? "CC1" : "CC2");
-		else
+		if (!noti->vsc_status) {
 			dev_info(rpmd->dev, "%s exit short status\n", __func__);
+			break;
+		}
+		dev_info(rpmd->dev, "%s enter short status, CC%s%s\n", __func__,
+			 noti->vsc_status & BIT(TCPC_POLARITY_CC1) ? "1" : "",
+			 noti->vsc_status & BIT(TCPC_POLARITY_CC2) ? "2" : "");
 		break;
 	case TCP_NOTIFY_SINK_VBUS:
 		dev_info(rpmd->dev, "%s sink vbus %dmV %dmA type(0x%02X)\n",
@@ -156,7 +165,8 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 			/* disable AudioAccessory connection */
 		}
 
-		if (new_state == TYPEC_UNATTACHED) {
+		if (new_state == TYPEC_UNATTACHED ||
+		    new_state == TYPEC_PROTECTION) {
 			typec_unregister_partner(rpmd->partner[idx]);
 			rpmd->partner[idx] = NULL;
 			if (rpmd->typec_caps[idx].prefer_role == TYPEC_SOURCE) {
@@ -337,6 +347,8 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		typec_mux_set(rpmd->mux[idx], &state);
 		break;
 	case TCP_NOTIFY_WD0_STATE:
+		if (bootmode == 8 || bootmode == 9)
+			break;
 		tcpm_typec_change_role_postpone(rpmd->tcpc[idx],
 						noti->wd0_state.wd0 ?
 						rpmd->role_def[idx] :
@@ -348,6 +360,10 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		break;
 	case TCP_NOTIFY_CC_HI:
 		dev_info(rpmd->dev, "%s cc_hi = %d\n", __func__, noti->cc_hi);
+		break;
+	case TCP_NOTIFY_ALERT_RATELIMITED:
+		dev_info(rpmd->dev, "%s alert_ratelimited = %d\n",
+				    __func__, noti->alert_ratelimited);
 		break;
 	default:
 		break;
@@ -718,7 +734,7 @@ MODULE_DEVICE_TABLE(of, rt_pd_manager_of_match);
 static struct platform_driver rt_pd_manager_driver = {
 	.driver = {
 		.name = "rt-pd-manager",
-		.of_match_table = of_match_ptr(rt_pd_manager_of_match),
+		.of_match_table = rt_pd_manager_of_match,
 	},
 	.probe = rt_pd_manager_probe,
 	.remove = rt_pd_manager_remove,
@@ -738,8 +754,9 @@ module_exit(rt_pd_manager_exit);
 
 MODULE_AUTHOR("Jeff Chang");
 MODULE_DESCRIPTION("Richtek pd manager driver");
-MODULE_LICENSE("GPL");
 MODULE_VERSION(RT_PD_MANAGER_VERSION);
+#endif	/* CONFIG_TCPC_CLASS */
+MODULE_LICENSE("GPL");
 
 /*
  * Release Note
