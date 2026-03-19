@@ -11,10 +11,12 @@ KCONFIG_EXT_PREFIX=${DEVICE_MODULES_DIR}
 
 MAKE_GOALS="$MAKE_GOALS
 modules
+dtbs
 "
 
 # These paths need to be relative to KERNEL_DIR.
 FILES="
+${DEVICE_MODULES_REL_DIR}/arch/arm64/boot/dts/mediatek/mt6878.dtb
 "
 
 EXT_MODULES+="
