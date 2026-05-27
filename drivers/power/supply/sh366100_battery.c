@@ -1547,7 +1547,7 @@ static s32 fg_get_property(struct power_supply* psy, enum power_supply_property 
 #if IS_ADC_HIGHFREQ
 		fg_read_designcap(sm);
 #endif
-		val->intval = sm->batt_designcap;
+		val->intval = 5300000;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
