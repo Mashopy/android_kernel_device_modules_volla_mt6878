@@ -12,6 +12,9 @@
 #include "inc/tcpci_typec.h"
 #include "inc/tcpci_timer.h"
 #include "inc/std_tcpci_v10.h"
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+#include "../../../../power/supply/charger_class.h"
+#endif
 
 enum TYPEC_WAIT_PS_STATE {
 	TYPEC_WAIT_PS_DISABLE = 0,

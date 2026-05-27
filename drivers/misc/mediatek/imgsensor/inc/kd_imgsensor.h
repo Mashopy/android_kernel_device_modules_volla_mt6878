@@ -224,12 +224,15 @@
 
 /*S5K*/
 #define S5KHP3SP_SENSOR_ID                      0x1b73
+#define S5KHM6SX_SENSOR_ID                      0x1AD6
 #define S5KJD1_SENSOR_ID                        0x3841
 #define S5K2LQSX_SENSOR_ID                      0x2c1a
 #define S5K4H7_SENSOR_ID                        0x487B
-#define S5K3P8SP_SENSOR_ID                      0x3108
+#define S5K3P8SP_SENSOR_ID                      0x3108 //drv add by lipengpeng 20240723 
+#define S5K3P8SPGMS_SENSOR_ID                      0x3108+2 //drv add by lipengpeng 20240723 
+#define S5KHM6SXGMS_SENSOR_ID                      0x1AD6+1
 #define S5K2T7SP_SENSOR_ID                      0x2147
-#define S5K3P8SX_SENSOR_ID                      0x3108
+#define S5K3P8SX_SENSOR_ID                      0x3109 //drv add by lipengpeng 20240723 
 #define S5K2L7_SENSOR_ID                        0x20C7
 #define S5K3L6_SENSOR_ID                        0x30C6
 #define S5K3L8_SENSOR_ID                        0x30C8
@@ -241,7 +244,7 @@
 #define S5K2P8_SENSOR_ID                        0x2108
 #define S5K3P3_SENSOR_ID                        0x3103
 #define S5K3P3SX_SENSOR_ID                      0x3103
-#define S5K3P8_SENSOR_ID                        0x3108
+#define S5K3P8_SENSOR_ID                        0x3110 //drv add by lipengpeng 20240723 
 #define S5K3P8STECH_SENSOR_ID                   0xf3108
 #define S5K3M2_SENSOR_ID                        0x30D2
 #define S5K4E6_SENSOR_ID                        0x4e60
@@ -369,7 +372,8 @@
 #define SHARP3D_SENSOR_ID                       0x003d
 #define T8EV5_SENSOR_ID                         0x1011
 
-#define S5KGD1SP_SENSOR_ID                      0x0841
+#define S5KGD1SP_SENSOR_ID                      (0x0841+0x1000)
+#define S5KGD1SPGMS_SENSOR_ID                      (0x0841+0x1001)
 #define HI846_SENSOR_ID                         0x0846
 #define OV02A10_MONO_SENSOR_ID                  0x2509
 #define IMX686_SENSOR_ID                        0X0686
@@ -393,16 +397,71 @@
 #define GC13A2_SENSOR_ID                        0x13a2
 #define S5KGN9SP_SENSOR_ID                      0x08E9
 
+//drv add by lipengpeng 20240429 start 
+#define HI5022_SENSOR_ID						0x5022
+#define SENSOR_DRVNAME_HI5022_MIPI_RAW          "hi5022_mipi_raw"
+#define HI5022GMS_SENSOR_ID						(0x5022+1)
+#define SENSOR_DRVNAME_HI5022GMS_MIPI_RAW          "hi5022gms_mipi_raw"
+#define HI5022WIDE_SENSOR_ID						0x5022+2
+#define SENSOR_DRVNAME_HI5022WIDE_MIPI_RAW          "hi5022wide_mipi_raw"
+#define OV64B40_SENSOR_ID                     0x566442+1
+#define SENSOR_DRVNAME_OV64B40_MIPI_RAW       "ov64b40_mipi_raw"
+#define S5KGD2SP_SENSOR_ID                     0x0842
+#define SENSOR_DRVNAME_S5KGD2SP_MIPI_RAW       "s5kgd2sp_mipi_raw"
+#define OV50H40MIRROR_SENSOR_ID                     0x565046+2
+#define SENSOR_DRVNAME_OV50H40MIRROR_MIPI_RAW       "ov50h40mirror_mipi_raw"
+#define S5KGD2SPGMS_SENSOR_ID                     0x0842+1
+#define SENSOR_DRVNAME_S5KGD2SPGMS_MIPI_RAW       "s5kgd2spgms_mipi_raw"
+#define OV50H40GMS_SENSOR_ID                     0x565046+1
+#define SENSOR_DRVNAME_OV50H40GMS_MIPI_RAW       "ov50h40gms_mipi_raw"
+#define S5KJN1SP_SENSOR_ID                     0x38E2
+#define SENSOR_DRVNAME_S5KJN1SP_MIPI_RAW       "s5kjn1sp_mipi_raw"
+
+#define S5KHP3SP23_SENSOR_ID                      0x1b73+2
+#define SENSOR_DRVNAME_S5KHP3SP23_MIPI_RAW        "s5khp3sp23_mipi_raw"
+#define S5KHP3SPGMS_SENSOR_ID                   0x1b73+1
+#define SENSOR_DRVNAME_S5KHP3SPGMS_MIPI_RAW     "s5khp3spgms_mipi_raw"
+
+#define HI847WIDE_SENSOR_ID                     0x0847+2
+#define SENSOR_DRVNAME_HI847WIDE_MIPI_RAW       "hi847wide_mipi_raw"
+
+#define S5KHP2SP_SENSOR_ID                     0x1b72
+#define SENSOR_DRVNAME_S5KHP2SP_MIPI_RAW       "s5khp2sp_mipi_raw"
+
+#define S5KHP2SPGMS_SENSOR_ID                     0x1b72+11
+#define SENSOR_DRVNAME_S5KHP2SPGMS_MIPI_RAW       "s5khp2spgms_mipi_raw"
+
+#define S5KHP2SX_SENSOR_ID                     0x1b72+10
+#define SENSOR_DRVNAME_S5KHP2SX_MIPI_RAW       "s5khp2sx_mipi_raw"
+
+//drv add by lipengpeng 20240429 end 
 /*prize add by zhuzhengjiang add for camera 202403 start*/
+#define HI847TELE_SENSOR_ID                     0x0847+1
+#define SENSOR_DRVNAME_HI847TELE_MIPI_RAW       "hi847tele_mipi_raw"
 #define OV08D10WIDE_SENSOR_ID                   0x560847
 #define SENSOR_DRVNAME_OV08D10WIDE_MIPI_RAW     "ov08d10wide_mipi_raw"
+#define S5K3P9SPSUB_SENSOR_ID                   0x3109+1
+#define SENSOR_DRVNAME_S5K3P9SPSUB_MIPI_RAW     "s5k3p9spsub_mipi_raw"
 #define OV08C10_SENSOR_ID                       0x560842
 #define SENSOR_DRVNAME_OV08C10_MIPI_RAW         "ov08c10_mipi_raw"
 #define OV50E40_SENSOR_ID                       0x565045
 #define SENSOR_DRVNAME_OV50E40_MIPI_RAW         "ov50e40_mipi_raw"
 #define S5KJN1SUB_SENSOR_ID                     0x38E1+1
 #define SENSOR_DRVNAME_S5KJN1SUB_MIPI_RAW       "s5kjn1sub_mipi_raw"
+#define OV32D40_SENSOR_ID                       0x563244
+#define SENSOR_DRVNAME_OV32D40_MIPI_RAW         "ov32d40_mipi_raw"
+#define OV32D40OUT_SENSOR_ID                    0x563244+1
+#define SENSOR_DRVNAME_OV32D40OUT_MIPI_RAW      "ov32d40out_mipi_raw"
+#define OV50D40_SENSOR_ID                       0x565044
+#define SENSOR_DRVNAME_OV50D40_MIPI_RAW         "ov50d40_mipi_raw"
 /*prize add by zhuzhengjiang add for camera 202403 end*/
+
+/* prize add by chenwenhui add for camera start */
+#define GC32E1SUB_SENSOR_ID                     0x32e1+1
+#define SENSOR_DRVNAME_GC32E1SUB_MIPI_RAW       "gc32e1sub_mipi_raw"
+#define GC02M1MACRO_SENSOR_ID                   0x2E0+1
+#define SENSOR_DRVNAME_GC02M1MACRO_MIPI_RAW     "gc02m1macro_mipi_raw"
+/* prize add by chenwenhui add for camera end */
 
 /* CAMERA DRIVER NAME */
 #define CAMERA_HW_DEVNAME                       "kd_camera_hw"
@@ -519,10 +578,13 @@
 
 /*S5K*/
 #define SENSOR_DRVNAME_S5KHP3SP_MIPI_RAW        "s5khp3sp_mipi_raw"
+#define SENSOR_DRVNAME_S5KHM6SX_MIPI_RAW        "s5khm6sx_mipi_raw"
+#define SENSOR_DRVNAME_S5KHM6SXGMS_MIPI_RAW        "s5khm6sxgms_mipi_raw"
 #define SENSOR_DRVNAME_S5KJD1_MIPI_RAW        "s5kjd1_mipi_raw"
 #define SENSOR_DRVNAME_S5K2LQSX_MIPI_RAW        "s5k2lqsx_mipi_raw"
 #define SENSOR_DRVNAME_S5K4H7_MIPI_RAW          "s5k4h7_mipi_raw"
 #define SENSOR_DRVNAME_S5K3P8SP_MIPI_RAW        "s5k3p8sp_mipi_raw"
+#define SENSOR_DRVNAME_S5K3P8SPGMS_MIPI_RAW        "s5k3p8spgms_mipi_raw"
 #define SENSOR_DRVNAME_S5K2T7SP_MIPI_RAW        "s5k2t7sp_mipi_raw"
 #define SENSOR_DRVNAME_S5K2T7SP_MIPI_RAW_5M     "s5k2t7sp_mipi_raw_5m"
 #define SENSOR_DRVNAME_S5K3P8SX_MIPI_RAW        "s5k3p8sx_mipi_raw"
@@ -634,6 +696,7 @@
 #define SENSOR_DRVNAME_OV13870_MIPI_RAW_5MP     "ov13870_mipi_raw_5mp"
 #define SENSOR_DRVNAME_OV8856_MIPI_RAW_5MP      "ov8856_mipi_raw_5mp"
 #define SENSOR_DRVNAME_S5KGD1SP_MIPI_RAW        "s5kgd1sp_mipi_raw"
+#define SENSOR_DRVNAME_S5KGD1SPGMS_MIPI_RAW        "s5kgd1spgms_mipi_raw"
 #define SENSOR_DRVNAME_HI846_MIPI_RAW           "hi846_mipi_raw"
 #define SENSOR_DRVNAME_GC02M0_MIPI_RAW          "gc02m0_mipi_raw"
 #define SENSOR_DRVNAME_OV02A10_MIPI_MONO        "ov02a10_mipi_mono"
@@ -656,6 +719,21 @@
 #define SENSOR_DRVNAME_GC13A2_MIPI_RAW          "gc13a2_mipi_raw"
 #define SENSOR_DRVNAME_S5KGN9SP_MIPI_RAW        "s5kgn9sp_mipi_raw"
 
+
+//drv added by wangmd 20241203,common sensor,start
+#define GC030A_SENSOR_ID 						0x030a //drv add by lipengpeng 20240823
+#define SENSOR_DRVNAME_GC030A_MIPI_RAW  		"gc030a_mipi_raw"
+#define S5K4H8_SENSOR_ID                     	0x4088
+#define SENSOR_DRVNAME_S5K4H8_MIPI_RAW       	"s5k4h8_mipi_raw"
+#define IMX615_SENSOR_ID                        0x0615
+#define SENSOR_DRVNAME_IMX615_MIPI_RAW          "imx615_mipi_raw"
+#define OV50H40_SENSOR_ID                     	0x565046
+#define SENSOR_DRVNAME_OV50H40_MIPI_RAW       	"ov50h40_mipi_raw"
+#define GC08A3_SENSOR_ID 						0x08a3
+#define SENSOR_DRVNAME_GC08A3_MIPI_RAW  		"gc08a3_mipi_raw"
+#define OVA0B40_SENSOR_ID                     	0x56A042
+#define SENSOR_DRVNAME_OVA0B40_MIPI_RAW       	"ov50b40_mipi_raw"
+//drv added by wangmd 20241203,common sensor,end
 /******************************************************************************
  *
  ******************************************************************************/

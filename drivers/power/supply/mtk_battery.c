@@ -615,7 +615,7 @@ static int battery_psy_get_property(struct power_supply *psy,
 	union power_supply_propval *val)
 {
 	int ret = 0;
-	int curr_now = 0, curr_avg = 0, voltage_now = 0;
+	int curr_now = 0, voltage_now = 0;
 	struct mtk_battery *gm;
 	struct battery_data *bs_data;
 
