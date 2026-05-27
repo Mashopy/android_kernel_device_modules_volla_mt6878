@@ -271,13 +271,11 @@
  */
 #define FTS_FOD_EN                              1  /* drv modify fod function */
 
-//drv-modify by shenwenbin for TP charger mode 20240304 start
 /*
  * Charger mode function enable
  * default: disable
  */
-#define FTS_CHARGER_MODE_EN                     1  /* drv modify charger mode function of notify methon */
-//drv-modify by shenwenbin for TP charger mode 20240304 end
+#define FTS_CHARGER_MODE_EN                     0
 
 /****************************************************/
 
