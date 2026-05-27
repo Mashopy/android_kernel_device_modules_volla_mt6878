@@ -106,3 +106,12 @@ obj-$(CONFIG_MTK_PGBOOST) += pgboost/
 obj-$(CONFIG_MTK_MBRAINK)      += mbraink/
 obj-$(CONFIG_MTK_IPS_HELPER) += ips/
 
+#pri added by huangxinglve 20250528 for als cali start
+obj-$(CONFIG_PRIZE_PIXEL_MANAGER) += pixel_manager/
+#pri added by huangxinglve 20250528 for als cali end
+# pri LAX10-192 added by litao 20240407 begin
+obj-$(CONFIG_PRIZE_HARDWARE_INFO) += hardware_info/
+# pri LAX10-192 added by litao 20240407 end
+#drv add by zhaopengge 20240516--start
+obj-y += pri/
+#drv add by zhaopengge 20240516--end

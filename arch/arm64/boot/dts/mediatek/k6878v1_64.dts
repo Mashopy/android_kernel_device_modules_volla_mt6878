@@ -13,25 +13,21 @@
 #include <dt-bindings/pinctrl/mt6897-pinfunc.h>
 #endif
 
-&chosen {
-bootargs_ext = "";
+/* Trustonic Mobilecore real driver */
+&mobicore{
+       trustonic,real-drv = <1>;
 };
 
-&mtk_leds {
-	compatible = "mediatek,i2c-leds";
 
-	backlight {
-		led-mode = <6>;
-		gate-enable = <1>;
-		pwm-config = <0 1 0 0 0>;
-	};
+&chosen {
+bootargs_ext = "";
 };
 
 &pdc {
 	pd-vbus-upper-bound = <9000000>;
 };
 
-#if 0
+#if 1
 
 &connfem {
 /* Enable epa_elna node to support Wifi & BT ePA/eLNA FEM on customer load */
@@ -59,35 +55,35 @@ bootargs_ext = "";
 	};
 	gps_l1_lna_pins_ol: gps-l1-lna0 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO143__FUNC_GPIO143>;
+			pinmux = <PINMUX_GPIO186__FUNC_GPIO186>;
 			output-low;
 		};
 	};
 	gps_l1_lna_pins_dsp_ctrl: gps-l1-lna1 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO143__FUNC_GPS_L1_ELNA_EN>;
+			pinmux = <PINMUX_GPIO186__FUNC_GPS_L1_ELNA_EN>;
 		};
 	};
 	gps_l1_lna_pins_oh: gps-l1-lna2 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO143__FUNC_GPIO143>;
+			pinmux = <PINMUX_GPIO186__FUNC_GPIO186>;
 			output-high;
 		};
 	};
 	gps_l5_lna_pins_ol: gps-l5-lna0 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO144__FUNC_GPIO144>;
+			pinmux = <PINMUX_GPIO187__FUNC_GPIO187>;
 			output-low;
 		};
 	};
 	gps_l5_lna_pins_dsp_ctrl: gps-l5-lna1 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO144__FUNC_GPS_L5_ELNA_EN>;
+			pinmux = <PINMUX_GPIO187__FUNC_GPS_L5_ELNA_EN>;
 		};
 	};
 	gps_l5_lna_pins_oh: gps-l5-lna2 {
 		pins-cmd-dat {
-			pinmux = <PINMUX_GPIO144__FUNC_GPIO144>;
+			pinmux = <PINMUX_GPIO187__FUNC_GPIO187>;
 			output-high;
 		};
 	};
@@ -114,15 +110,85 @@ bootargs_ext = "";
 #endif
 
 &i2c6 {
-	spk: speaker-amp@5c {
-		compatible = "richtek,rt5512";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		#sound-dai-cells = <0>;
-		reg = <0x5c>;
+        spk: speaker-amp@5c {
+                compatible = "richtek,rt5512";
+                #address-cells = <1>;
+                #size-cells = <0>;
+                #sound-dai-cells = <0>;
+                reg = <0x5c>;
+                status = "okay";
+                sound-name-prefix = "Left";
+        };
+};
+
+/* AWINIC AW87565 Smart PA stereo*/
+&i2c6 {
+	aw87xxx_pa_0: aw87xxx_pa_0@58 {  //rcv/spk
+		compatible = "awinic,aw87xxx_pa";
+		reg = <0x58>;
+		dev_index = <1>;
+		reset-gpio = <&pio 42 0>;
 		status = "okay";
-		sound-name-prefix = "Left";
 	};
+
+	aw87xxx_pa_1: aw87xxx_pa_1@5B {  //spk
+		compatible = "awinic,aw87xxx_pa";
+		reg = <0x5B>;
+		dev_index = <0>;
+		reset-gpio = <&pio 147 0>;
+		status = "okay";
+	};
+};
+
+//hl5280 accdet
+&i2c3 {
+	fsa4480_switch: fsa4480_switch@42 {
+		compatible = "mediatek,hl5280-i2c";
+		reg = <0x42>;
+		// mic and gnd swap threshold in mV,
+		// only used when FSA4480_SWITCH_BY_ACCDET_ADC set
+		mic_swap_thr = <200>;
+		status = "okay";
+	};
+};
+
+//HAC
+&pio {
+    hac_default: hac_default {
+        pins_cmd_dat {
+            pinmux = <PINMUX_GPIO30__FUNC_GPIO30>;
+            slew-rate = <1>; // 0:input, 1:output
+            bias-disable;
+            output-low;
+        };
+    };
+    hac_high: hac_high {
+        pins_cmd_dat {
+            pinmux = <PINMUX_GPIO30__FUNC_GPIO30>;
+            slew-rate = <1>;
+            bias-disable;
+            output-high;
+        };
+    };
+    hac_low: hac_low {
+        pins_cmd_dat {
+            pinmux = <PINMUX_GPIO30__FUNC_GPIO30>;
+            slew-rate = <1>;
+            bias-disable;
+            output-low;
+        };
+    };
+};
+
+&odm {
+    hac: hac {
+        compatible = "prize,hac-gpio";
+        pinctrl-names = "default", "hac_high", "hac_low";
+        pinctrl-0 = <&hac_default>;
+        pinctrl-1 = <&hac_high>;
+        pinctrl-2 = <&hac_low>;
+        status = "okay";
+    };
 };
 
 &sound {
@@ -235,13 +301,13 @@ bootargs_ext = "";
 	#size-cells = <0>;
 	switch-fps = <120>;
 	panel1@0 {
-		compatible = "jdi,nt36672e,vdo,120hz,threshold";
+		compatible = "visionox,hc5622,cmd";
 		reg = <0>;
-		pm-enable-gpios = <&pio 149 0>;
 		reset-gpios = <&pio 90 0>;
-		res-switch = <2>;
-		gate-ic = <4831>;
-		rc-enable = <1>;
+		bias-gpios = <&pio 44 0>,
+				<&pio 153 0>;
+		vldo18-gpios = <&pio 10 0>;
+
 		pinctrl-names = "default";
 		port {
 			panel_in1: endpoint {
@@ -249,42 +315,11 @@ bootargs_ext = "";
 			};
 		};
 	};
-	panel2@1 {
-		compatible = "jdi,nt36672e,vdo,60hz";
-		reg = <1>;
-		pm-enable-gpios = <&pio 149 0>;
-		reset-gpios = <&pio 90 0>;
-		gate-ic = <4831>;
-		pinctrl-names = "default";
-		port {
-			panel_in2: endpoint {
-				remote-endpoint = <&dsi_out2>;
-			};
-		};
-	};
-	panel3@2 {
-		compatible = "truly,td4330,cmd";
-		reg = <2>;
-		pm-enable-gpios = <&pio 149 0>;
-		reset-gpios = <&pio 90 0>;
-		gate-ic = <4831>;
-		pinctrl-names = "default";
-		port {
-			panel_in3: endpoint {
-				remote-endpoint = <&dsi_out3>;
-			};
-		};
-	};
+
 	ports {
 		port {
 			dsi_out: endpoint {
 				remote-endpoint = <&panel_in1>;
-			};
-			dsi_out2: endpoint2 {
-				remote-endpoint = <&panel_in2>;
-			};
-			dsi_out3: endpoint3 {
-				remote-endpoint = <&panel_in3>;
 			};
 		};
 	};
@@ -317,8 +352,190 @@ bootargs_ext = "";
 	regulator-always-on;
 };
 
+//drv add fangduozhu, LRA AW86927FCR bringup, 20250425 start
+&i2c9 {
+	clock-frequency = <1000000>;
+	status = "okay";
+
+	haptic_hv@5A {
+		compatible = "awinic,haptic_hv";
+		reg = <0x5A>;
+		status = "okay";
+		irq-gpio = <&pio 107 0>;
+		reset-gpio = <&pio 116 0>;
+		pinctrl-names = "irq_active";
+		pinctrl-0 = <&irq_active_default>;
+		f0_pre = < 1700 >;
+		mode = /bits/ 8 < 5 >;
+		aw8692x_f0_cali_percent = /bits/ 8 < 7 >;
+		aw8692x_gain_bypass = /bits/ 8 < 1 >;
+		aw8692x_cont_drv1_lvl = /bits/ 8 < 0x7F >;
+		aw8692x_cont_lra_vrms = < 1000 >; /* Motor rated voltage, mV */
+		aw8692x_cont_drv1_time = /bits/ 8 < 0x04 >;
+		aw8692x_cont_drv2_time = /bits/ 8 < 0x06 >;
+		aw8692x_cont_track_margin = /bits/ 8 < 0x0F >;
+		aw8692x_cont_brk_gain = /bits/ 8 < 0x08 >;
+		aw8692x_cont_bst_brk_gain = /bits/ 8 < 0x05 >;
+		aw8692x_cont_wait_num = /bits/ 8 < 0x06 >;
+		aw8692x_cont_brk_time = /bits/ 8 < 0x08 >;
+		aw8692x_brk_bst_md = /bits/ 8 < 0 >;
+		aw8692x_cont_tset = /bits/ 8 < 0x06 >;
+		aw8692x_cont_bemf_set = /bits/ 8 < 0x02 >;
+		aw8692x_duration_time = /bits/ 8 < 20 30 60 >;
+		aw8692x_d2s_gain = /bits/ 8 < 0x04 >;
+		aw8692x_trig_config = /bits/ 8 < 0 0 0 1 0 2 0 0
+						 0 0 0 1 0 2 0 0
+						 0 0 0 1 0 2 0 0 >;
+		aw8692x_bst_vol_default = < 9000 >;
+		aw8692x_is_enabled_track_en;
+		/* aw8692x_is_enabled_auto_bst; */
+		/* aw8692x_is_enabled_one_wire; */
+	};
+};
+
+&pio {
+	irq_active_default: irq_active_default {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO107__FUNC_GPIO107>;
+			input-enable;
+			bias-pull-up = <00>;
+		};
+	};
+};
+//drv add fangduozhu, LRA AW86927FCR bringup, 20250425 end
+/*add by driver for nfc bringup start*/
+&i2c3 {
+    clock-frequency = <400000>;
+	st21nfc: st21nfc@08 {
+		compatible = "st,st21nfc";
+		reg = <0x08>;
+		interrupt-parent = <&pio>;
+		interrupts = <2 0>;
+		reset-gpios = <&pio 154 0x00>;
+		irq-gpios = <&pio 2 0x00>;
+		clkreq-gpios = <&pio 151 0x00>;
+		status = "ok";
+	};
+};
+/*add by driver for nfc bringup end*/
+//pri add for goodix fingerprint
+&spi1{
+	#address-cells = <1>;
+	#size-cells = <0>;
+	goodix: gffingerprint@spi1 {
+		compatible = "goodix,goodix-fp";
+		reg = <0>;
+		spi-max-frequency = <26000000>;
+		status = "okay";
+	};
+};
+&goodix_fp {
+	interrupt-parent = <&pio>;
+	interrupts = <13 IRQ_TYPE_EDGE_RISING 13 0>;
+	VFP-supply = <&mt6369_vfp>;
+	//fpid-gpio = <&pio 12 0>;
+	goodix-fp,use-dts-chip-info;
+	goodix-fp,chip-name = "GW9598";
+	goodix-fp,chip-id = /bits/ 16 <0x1261>;
+	pinctrl-names = "default","fingerprint_irq", "fp_reset_high", "fp_reset_low", "miso_spi",
+					"miso_pullhigh", "miso_pulllow", "fpc_mosi_pull_up", "fpc_mosi_pull_down";
+	pinctrl-0 = <&fpc_pins_default>;
+	pinctrl-1 = <&fpc_pins_eint_as_int>;
+	pinctrl-2 = <&fpc_pins_rst_high>;
+	pinctrl-3 = <&fpc_pins_rst_low>;
+	pinctrl-4 = <&fpc_mode_as_cs &fpc_mode_as_ck &fpc_mode_as_mi &fpc_mode_as_mo>;
+	pinctrl-5 = <&fpc_miso_pull_up>;
+	pinctrl-6 = <&fpc_miso_pull_down>;
+	pinctrl-7 = <&fpc_mosi_pull_up>;
+	pinctrl-8 = <&fpc_mosi_pull_down>;
+	status = "okay";
+};
+&pio {
+	fpc_pins_default: fpcdefault {
+	};
+	fpc_pins_eint_as_int: fpceint@0 {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO13__FUNC_GPIO13>;
+			slew-rate = <0>;
+			bias-disable;
+		};
+	};
+	fpc_pins_rst_high: fpcrsthigh {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO155__FUNC_GPIO155>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+	fpc_pins_rst_low: fpcrstlow {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO155__FUNC_GPIO155>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+	fpc_mode_as_cs: fpccs {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO61__FUNC_SPI1_CSB>;
+			bias-pull-up = <00>;
+		};
+	};
+	fpc_mode_as_ck: fpcck {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO60__FUNC_SPI1_CLK>;
+			bias-pull-up = <00>;
+		};
+	};
+	fpc_mode_as_mi: fpcmi {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO63__FUNC_SPI1_MI>;
+			bias-pull-up = <00>;
+		};
+	};
+	fpc_mode_as_mo: fpcmo {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO62__FUNC_SPI1_MO>;
+			bias-pull-down = <00>;
+		};
+	};
+	fpc_miso_pull_up: fpcmisoup {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO63__FUNC_GPIO63>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+	fpc_miso_pull_down: fpcmisolow {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO63__FUNC_GPIO63>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+	fpc_mosi_pull_up: fpcmosiup {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO62__FUNC_GPIO62>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+	fpc_mosi_pull_down: fpcmosilow {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO62__FUNC_GPIO62>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+};
+/* pri fingerprint add by cjd  end */
+
 #include <k6878v1_64/cust.dtsi>
 #include "mediatek/cust_mt6878_touch_1080x2400.dtsi"
 #include "mediatek/cust_mt6878_camera_v4l2.dtsi"
+#include "mediatek/upm6722.dtsi"
+#include "mediatek/cust_charger.dtsi"
 #include "mediatek/cust_k6878_connfem.dtsi"
+/* prize add by chenwenhui for camera ldo wl28681 start */
+#include "mediatek/wl28681.dtsi"
+/* prize add by chenwenhui for camera ldo wl28681 end */
 /*End of this file, DO NOT ADD ANYTHING HERE*/

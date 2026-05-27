@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: GPL-2.0
+//
+// Copyright (c) 2021 MediaTek Inc.
+
+&odm {
+	wl28681_eint:wl28681_eint {
+	};
+
+	wl28681_gpio1: wl28681-gpio1 {
+		compatible = "regulator-fixed";
+		regulator-name = "wl28681-gpio1";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&wl28681_ldo1>;
+		enable-active-high;
+		gpio = <&wl28681 0 0x0>;
+	};
+
+	wl28681_gpio2: wl28681-gpio2 {
+		compatible = "regulator-fixed";
+		regulator-name = "wl28681-gpio2";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&wl28681_ldo1>;
+		enable-active-high;
+		gpio = <&wl28681 1 0x0>;
+	};
+
+	wl28681_gpio3: wl28681-gpio3 {
+		compatible = "regulator-fixed";
+		regulator-name = "wl28681-gpio3";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&wl28681_ldo1>;
+		enable-active-high;
+		gpio = <&wl28681 2 0x0>;
+	};
+};
+&i2c6 {
+	wl28681: wl28681@35 {
+		status = "ok";
+		compatible = "willsemi,wl28681";
+		reg = <0x35>;
+		wakeup-source;
+		/* Temporarily choose unused gpios */
+		//interrupts-extended = <&pio 82 0x0>;
+		
+		reset-gpio = <&pio 183 0x0>;
+		//dcdc-gpio   = <&pio 31 0x1>;
+		gpio-supply = <&wl28681_ldo1>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		regulator_nb = "wl28681-ldo1", "wl28681-ldo2",
+				"wl28681-ldo3", "wl28681-ldo4",
+				"wl28681-ldo5", "wl28681-ldo6",
+				"wl28681-ldo7", "wl28681-ldo8";
+		regulators {
+			BASE {
+				regulator-name = "wl28681,base";
+				oc_shutdown_all = <0>;
+				pgb_shutdown_all = <0>;
+			};
+			wl28681_ldo1: LDO1 {
+				regulator-name = "wl28681-ldo1";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1200000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo2: LDO2 {
+				regulator-name = "wl28681-ldo2";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1200000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo3: LDO3 {
+				regulator-name = "wl28681-ldo3";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo4: LDO4 {
+				regulator-name = "wl28681-ldo4";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo5: LDO5 {
+				regulator-name = "wl28681-ldo5";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo6: LDO6 {
+				regulator-name = "wl28681-ldo6";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+			wl28681_ldo7: LDO7 {
+				regulator-name = "wl28681-ldo7";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+				regulator-active-discharge;
+				oc_ptsel = <1>;
+				pgb_ptsel = <1>;
+				soft_start_time_sel = <1>;
+			};
+		};
+	};
+};

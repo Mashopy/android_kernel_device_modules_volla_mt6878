@@ -1,0 +1,20 @@
+#
+#Fingerprint
+#
+menuconfig INPUT_FINGERPRINT
+	bool "fingerprint"
+	help
+	  Say Y here, and a list of supported fingerprint will be displayed.
+	  This option doesn't affect the kernel.
+
+	  If unsure, say Y.
+
+if INPUT_FINGERPRINT
+config PRIZE_FP_USE_VFP
+	bool "Fingerprint power vfp"
+	default n
+	help
+	  CHIPONE fingerprint CHIPONE's device.
+
+source "$(KCONFIG_EXT_PREFIX)drivers/input/fingerprint/goodix-gw9518/Kconfig"
+endif

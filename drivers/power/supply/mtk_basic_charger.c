@@ -67,9 +67,39 @@ static int _uA_to_mA(int uA)
 		return uA / 1000;
 }
 
+// drv add tankaikun, add ffc charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_FFC_CHARGE)
+static int cs_get_ffc_fv(struct mtk_charger *info, int temp_c)
+{
+	int ffc_max_fv;
+	int i = 0;
+	int temp = temp_c;
+	int num_zones;
+	struct cs_chrg_ffc_zone *zone;
+
+	num_zones = info->num_ffc_zones;
+	zone = info->ffc_zones;
+	while (i < num_zones && temp > zone[i++].temp_c);
+	zone = i > 0? &zone[i - 1] : NULL;
+
+	info->chrg_iterm = zone->ffc_chg_iterm;
+	ffc_max_fv = zone->ffc_max_mv*1000;
+	pr_info("[cs_chrg] FFC temp zone %d, fv %d mV, chg iterm %d mA\n",
+		  i, ffc_max_fv, info->chrg_iterm);
+
+	return ffc_max_fv;
+}
+#endif /* CONFIG_CHARGER_FFC_CHARGE */
+// drv add tankaikun, add ffc charging, 20231130 end
+
 static void select_cv(struct mtk_charger *info)
 {
 	u32 constant_voltage;
+// drv add tankaikun, add step charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_FFC_CHARGE)
+	int ffc_max_fv;
+	int ta_type;
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
 
 	if (info->enable_sw_jeita)
 		if (info->sw_jeita.cv != 0) {
@@ -79,6 +109,20 @@ static void select_cv(struct mtk_charger *info)
 
 	constant_voltage = info->data.battery_cv;
 	info->setting.cv = constant_voltage;
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+	info->setting.step_cv = info->chrg_step.chrg_step_cv_volt;
+	info->setting.cv = info->chrg_step.chrg_step_cv_volt;
+#if IS_ENABLED(CONFIG_CHARGER_FFC_CHARGE)
+	ta_type = adapter_dev_get_property(info->adapter_dev[PD], CAP_TYPE);
+	if (ta_type == MTK_PD_APDO &&
+			info->data.battery_cv == info->chrg_step.chrg_step_cv_volt) {
+		ffc_max_fv = cs_get_ffc_fv(info, info->battery_temp);
+		info->setting.cv = ffc_max_fv;
+		info->setting.step_cv = ffc_max_fv;
+	}
+#endif /* CONFIG_CHARGER_FFC_CHARGE */
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
+// drv add tankaikun, add step charging, 20231130 end
 }
 
 static bool is_typec_adapter(struct mtk_charger *info)
@@ -96,6 +140,436 @@ static bool is_typec_adapter(struct mtk_charger *info)
 
 	return false;
 }
+
+// drv add tankaikun, add step charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+#define MIN_TEMP_C -20
+#define MAX_TEMP_C 60
+#define HYSTEREISIS_DEGC 2
+
+bool cs_find_temp_zone(struct mtk_charger *info, int temp_c, bool ignore_hysteresis_degc)
+{
+	int prev_zone, num_zones;
+	struct cs_chrg_temp_zone *zones;
+	int hotter_t = 0, hotter_fcc = 0;
+	int colder_t = 0, colder_fcc = 0;
+	int i;
+	int max_temp;
+
+	if (!info) {
+		pr_err("[cs_chrg] called before info valid!\n");
+		return false;
+	}
+
+	zones = info->temp_zones;
+	num_zones = info->num_temp_zones;
+	prev_zone = info->pres_temp_zone;
+
+	pr_err("[cs_chrg] num_zones:%d prev_zone:%d, temp_c:%d\n",num_zones, prev_zone, temp_c);
+	max_temp = zones[num_zones - 1].temp_c;
+
+	if (prev_zone == ZONE_NONE) {
+		for (i = num_zones - 1; i >= 0; i--) {
+			pr_err("[cs_chrg] temp_c:%d zones[%d].temp_c:%d \n", temp_c, i, zones[i].temp_c);
+			if (temp_c >= zones[i].temp_c) {
+				if (i == num_zones - 1)
+					info->pres_temp_zone = ZONE_HOT;
+				else
+					info->pres_temp_zone = i + 1;
+				return true;
+			}
+		}
+		info->pres_temp_zone = ZONE_COLD;
+		return true;
+	}
+	pr_err("[cs_chrg] pres_temp_zone:%d\n",info->pres_temp_zone);
+
+	if (prev_zone == ZONE_COLD) {
+		if (temp_c >= MIN_TEMP_C + HYSTEREISIS_DEGC)
+			info->pres_temp_zone = ZONE_FIRST;
+	} else if (prev_zone == ZONE_HOT) {
+		if (temp_c <=  max_temp - HYSTEREISIS_DEGC)
+			info->pres_temp_zone = num_zones - 1;
+	} else {
+		if (prev_zone == ZONE_FIRST) {
+			hotter_t = zones[prev_zone].temp_c;
+			colder_t = MIN_TEMP_C;
+			hotter_fcc = zones[prev_zone + 1].chrg_step_power->chrg_step_curr;
+			colder_fcc = 0;
+		} else if (prev_zone == num_zones - 1) {
+			hotter_t = zones[prev_zone].temp_c;
+			colder_t = zones[prev_zone - 1].temp_c;
+			hotter_fcc = 0;
+			colder_fcc = zones[prev_zone - 1].chrg_step_power->chrg_step_curr;
+		} else {
+			hotter_t = zones[prev_zone].temp_c;
+			colder_t = zones[prev_zone - 1].temp_c;
+			hotter_fcc = zones[prev_zone + 1].chrg_step_power->chrg_step_curr;
+			colder_fcc = zones[prev_zone - 1].chrg_step_power->chrg_step_curr;
+		}
+
+		if (!ignore_hysteresis_degc) {
+			if (zones[prev_zone].chrg_step_power->chrg_step_curr < hotter_fcc)
+				hotter_t += HYSTEREISIS_DEGC;
+			if (zones[prev_zone].chrg_step_power->chrg_step_curr < colder_fcc)
+				colder_t -= HYSTEREISIS_DEGC;
+		}
+
+		if (temp_c <= MIN_TEMP_C)
+			info->pres_temp_zone = ZONE_COLD;
+		else if (temp_c >= max_temp)
+			info->pres_temp_zone = ZONE_HOT;
+		else if (temp_c >= hotter_t)
+			info->pres_temp_zone++;
+		else if (temp_c < colder_t)
+			info->pres_temp_zone--;
+	}
+
+	pr_err("[cs_chrg] batt temp_c %d, prev zone %d, pres zone %d, "
+						"hotter_fcc %duA, colder_fcc %duA, "
+						"hotter_t %dC, colder_t %dC\n",
+						temp_c,prev_zone, info->pres_temp_zone,
+						hotter_fcc, colder_fcc, hotter_t, colder_t);
+
+	if (prev_zone != info->pres_temp_zone) {
+		pr_err("[cs_chrg] Entered Temp Zone %d!\n",
+			   info->pres_temp_zone);
+		return true;
+	}
+	return false;
+}
+
+bool cs_find_chrg_step(struct mtk_charger *info, int temp_zone, int vbatt_volt)
+{
+	int batt_volt, ibat, i, ret;
+	bool find_step = false;
+	struct cs_chrg_temp_zone zone;
+	struct cs_chrg_step_power *chrg_steps;
+	struct cs_chrg_step_info chrg_step_inline;
+	struct cs_chrg_step_info prev_step;
+	struct power_supply *bat_psy = NULL;
+	union power_supply_propval prop = {0};
+
+	if (!info) {
+		pr_err("[cs_chrg] called before info valid!\n");
+		return false;
+	}
+
+	if (info->pres_temp_zone == ZONE_HOT ||
+		info->pres_temp_zone == ZONE_COLD ||
+		info->pres_temp_zone < ZONE_FIRST) {
+		pr_err("[cs_chrg] pres temp zone is HOT or COLD, "
+							"can't find chrg step\n");
+		info->chrg_step.pres_chrg_step = 0;
+		info->chrg_step.chrg_step_cc_curr = 0;
+		info->chrg_step.chrg_step_cv_tapper_curr = 0;
+		return false;
+	}
+
+	zone = info->temp_zones[info->pres_temp_zone];
+	chrg_steps = zone.chrg_step_power;
+	prev_step = info->chrg_step;
+
+	batt_volt = vbatt_volt*1000;
+	chrg_step_inline.temp_c = zone.temp_c;
+
+	bat_psy = power_supply_get_by_name("battery");
+	if (bat_psy == NULL || IS_ERR(bat_psy)) {
+		chr_err("%s Couldn't get bat_psy\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = power_supply_get_property(bat_psy, POWER_SUPPLY_PROP_CURRENT_NOW, &prop);
+	if (ret) {
+		pr_err("[cs_chrg] power_supply_get_property POWER_SUPPLY_PROP_CURRENT_NOW failed ret = %d \n", ret);
+		ibat = 0;
+	} else {
+		ibat = prop.intval;
+	}
+
+	pr_err("[cs_chrg] batt_volt %d, chrg step %d, step nums %d ibat %d \n",
+						batt_volt, prev_step.pres_chrg_step,
+						info->chrg_step_nums, ibat);
+
+	/*In the first search cycle, find out the vbatt is less than step volt*/
+	for (i = 0; i < info->chrg_step_nums; i++) {
+		pr_err("[cs_chrg] first cycle,i %d, step volt %d, batt_volt:%d cv_tapper_curr:%d ibat:%d\n",
+					i, chrg_steps[i].chrg_step_volt, batt_volt, prev_step.chrg_step_cv_tapper_curr, ibat);
+		if (chrg_steps[i].chrg_step_volt > 0 && batt_volt < (chrg_steps[i].chrg_step_volt - 100000)
+				&& (prev_step.chrg_step_cv_tapper_curr + 100000) > ibat) {
+			if ((i + 1) < info->chrg_step_nums
+				&& chrg_steps[i + 1].chrg_step_volt > 0) {
+				chrg_step_inline.chrg_step_cv_tapper_curr =
+					chrg_steps[i + 1].chrg_step_curr;
+			} else
+				chrg_step_inline.chrg_step_cv_tapper_curr =
+					chrg_steps[i].chrg_step_curr;
+
+			chrg_step_inline.chrg_step_cc_curr =
+				chrg_steps[i].chrg_step_curr;
+			chrg_step_inline.chrg_step_cv_volt =
+				chrg_steps[i].chrg_step_volt;
+			chrg_step_inline.pres_chrg_step = i;
+			find_step = true;
+			pr_err("[cs_chrg] find chrg step\n");
+			break;
+		}
+	}
+
+	if (find_step) {
+		pr_err("[cs_chrg] chrg step %d, "
+					"step cc curr %d, step cv volt %d, "
+					"step cv tapper curr %d\n",
+					chrg_step_inline.pres_chrg_step,
+					chrg_step_inline.chrg_step_cc_curr,
+					chrg_step_inline.chrg_step_cv_volt,
+					chrg_step_inline.chrg_step_cv_tapper_curr);
+		info->chrg_step = chrg_step_inline;
+	} else {
+		if (prev_step.pres_chrg_step <= 0) {
+			for (i = 0; i < info->chrg_step_nums; i++) {
+				if (chrg_steps[i].chrg_step_volt > 0
+					&& batt_volt > chrg_steps[i].chrg_step_volt) {
+					if ( (i + 1) < info->chrg_step_nums
+						&& chrg_steps[i + 1].chrg_step_volt > 0) {
+						chrg_step_inline.chrg_step_cv_tapper_curr =
+							chrg_steps[i + 1].chrg_step_curr;
+					} else
+						chrg_step_inline.chrg_step_cv_tapper_curr =
+							chrg_steps[i].chrg_step_curr;
+					chrg_step_inline.chrg_step_cc_curr =
+						chrg_steps[i].chrg_step_curr;
+					chrg_step_inline.chrg_step_cv_volt =
+						chrg_steps[i].chrg_step_volt;
+					chrg_step_inline.pres_chrg_step = i;
+					find_step = true;
+					pr_err("[cs_chrg] find second cycle, i %d, step volt %d, batt_volt %d\n",
+							i, chrg_steps[i].chrg_step_volt, batt_volt);
+				}
+			}
+		}
+
+		if (find_step) {
+			pr_err("[cs_chrg] chrg step %d, "
+					"step cc curr %d, step cv volt %d, "
+					"step cv tapper curr %d\n",
+					chrg_step_inline.pres_chrg_step,
+					chrg_step_inline.chrg_step_cc_curr,
+					chrg_step_inline.chrg_step_cv_volt,
+					chrg_step_inline.chrg_step_cv_tapper_curr);
+			info->chrg_step = chrg_step_inline;
+		}
+	}
+
+	if (!find_step && info->temp_zone_change) {
+		if (chrg_steps[1].chrg_step_volt > 0) {
+			chrg_step_inline.chrg_step_cv_tapper_curr =
+				chrg_steps[1].chrg_step_curr;
+		} else
+			chrg_step_inline.chrg_step_cv_tapper_curr =
+				chrg_steps[0].chrg_step_curr;
+		chrg_step_inline.chrg_step_cc_curr =
+			chrg_steps[0].chrg_step_curr;
+		chrg_step_inline.chrg_step_cv_volt =
+			chrg_steps[0].chrg_step_volt;
+		chrg_step_inline.pres_chrg_step = i;
+		info->chrg_step = chrg_step_inline;
+		find_step = true;
+	}
+
+	if (find_step) {
+		if (info->chrg_step.chrg_step_cc_curr ==
+			info->chrg_step.chrg_step_cv_tapper_curr)
+			info->chrg_step.last_step = true;
+		else
+			info->chrg_step.last_step = false;
+
+		pr_err("[cs_chrg] Temp zone %d, "
+				"select chrg step %d, step cc curr %d,"
+				"step cv volt %d, step cv tapper curr %d, "
+				"is the last chrg step %d\n",
+				info->pres_temp_zone,
+				info->chrg_step.pres_chrg_step,
+				info->chrg_step.chrg_step_cc_curr,
+				info->chrg_step.chrg_step_cv_volt,
+				info->chrg_step.chrg_step_cv_tapper_curr,
+				info->chrg_step.last_step);
+
+		if (prev_step.pres_chrg_step != info->chrg_step.pres_chrg_step) {
+			pr_err("[cs_chrg] Find the next chrg step\n");
+			return true;
+		}
+	}
+	return false;
+}
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
+
+// drv add tankaikun, thermal charging limit, start
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+bool cs_find_thmeral_zone(struct mtk_charger *info, int temp_c)
+{
+	int prev_zone, num_zones;
+	struct cs_chrg_thermal_zone *zones;
+	int target_fcc = 0;
+	int hotter_t, colder_t;
+	int i;
+	int max_temp;
+
+	if (!info) {
+		pr_err("[cs_chrg] called before info valid!\n");
+		return false;
+	}
+
+	zones = info->therm_zones;
+	num_zones = info->num_thermal_zones;
+	prev_zone = info->pres_therm_zone;
+
+	if (zones==NULL || num_zones==0)
+		return false;
+
+	pr_err("[cs_chrg] num_zones:%d prev_zone:%d, temp_c:%d\n",num_zones, prev_zone, temp_c);
+	max_temp = zones[num_zones - 1].temp_c;
+
+	if (prev_zone == THERM_ZONE_FIRST) {
+		for (i = num_zones - 1; i >= 0; i--) {
+			pr_err("[cs_chrg] temp_c:%d zones[%d].temp_c:%d \n", temp_c, i, zones[i].temp_c);
+			if (temp_c >= zones[i].temp_c) {
+				if (i == num_zones - 1)
+					info->pres_therm_zone = num_zones - 1;
+				else
+					info->pres_therm_zone = i;
+				break;
+			}
+		}
+	}
+
+	if (prev_zone == THERM_ZONE_FIRST) {
+		hotter_t = zones[prev_zone+1].temp_c;
+		colder_t = zones[prev_zone].temp_hyst_c;
+		target_fcc = -1;
+		info->chrg_therm_limit_curr = -1;
+	} else if (prev_zone == (num_zones - 1)) {
+		hotter_t = zones[num_zones - 1].temp_c;
+		colder_t = zones[num_zones - 1].temp_hyst_c;
+		if (temp_c < colder_t)
+			info->pres_therm_zone--;
+	} else {
+		hotter_t = zones[prev_zone+1].temp_c;
+		colder_t = zones[prev_zone].temp_hyst_c;
+
+		if (temp_c <= zones[THERM_ZONE_FIRST].temp_c)
+			info->pres_therm_zone = 0;
+		else if (temp_c >= max_temp)
+			info->pres_therm_zone = (num_zones - 1);
+		else if (temp_c >= hotter_t)
+			info->pres_therm_zone++;
+		else if (temp_c < colder_t)
+			info->pres_therm_zone--;
+	}
+
+	if (info->pres_therm_zone != THERM_ZONE_FIRST && info->pres_therm_zone < info->num_thermal_zones) {
+		target_fcc = zones[info->pres_therm_zone].chrg_limit_curr;
+		info->chrg_therm_limit_curr = target_fcc*1000;
+	}
+
+	pr_err("[cs_chrg] batt temp_c %d, prev therm zone %d, pres therm zone %d, "
+						"target_fcc %duA, "
+						"hotter_t %dC, colder_t %dC\n",
+						temp_c, prev_zone, info->pres_therm_zone,
+						target_fcc, hotter_t, colder_t);
+
+	if (prev_zone != info->pres_therm_zone) {
+		pr_err("[cs_chrg] Entered Temp Zone %d!\n",
+			   info->pres_therm_zone);
+		return true;
+	}
+
+	return false;
+}
+
+bool cs_find_wireless_thmeral_zone(struct mtk_charger *info, int temp_c)
+{
+	int prev_zone, num_zones;
+	struct cs_chrg_thermal_zone *zones;
+	int target_fcc = 0;
+	int hotter_t, colder_t;
+	int i;
+	int max_temp;
+
+	if (!info) {
+		pr_err("[cs_chrg] called before info valid!\n");
+		return false;
+	}
+
+	zones = info->wireless_therm_zones;
+	num_zones = info->num_wireless_thermal_zones;
+	prev_zone = info->pres_wireless_therm_zone;
+
+	if (zones==NULL || num_zones==0)
+		return false;
+
+	pr_err("[cs_chrg] wireless num_zones:%d prev_zone:%d, temp_c:%d\n",num_zones, prev_zone, temp_c);
+	max_temp = zones[num_zones - 1].temp_c;
+
+	if (prev_zone == THERM_ZONE_FIRST) {
+		for (i = num_zones - 1; i >= 0; i--) {
+			pr_err("[cs_chrg] wireless temp_c:%d zones[%d].temp_c:%d \n", temp_c, i, zones[i].temp_c);
+			if (temp_c >= zones[i].temp_c) {
+				if (i == num_zones - 1)
+					info->pres_wireless_therm_zone = num_zones - 1;
+				else
+					info->pres_wireless_therm_zone = i;
+				break;
+			}
+		}
+	}
+
+	if (prev_zone == THERM_ZONE_FIRST) {
+		hotter_t = zones[prev_zone+1].temp_c;
+		colder_t = zones[prev_zone].temp_hyst_c;
+		target_fcc = -1;
+		info->chrg_wireless_therm_limit_curr = -1;
+	} else if (prev_zone == (num_zones - 1)) {
+		hotter_t = zones[num_zones - 1].temp_c;
+		colder_t = zones[num_zones - 1].temp_hyst_c;
+		if (temp_c < colder_t)
+			info->pres_wireless_therm_zone--;
+	} else {
+		hotter_t = zones[prev_zone+1].temp_c;
+		colder_t = zones[prev_zone].temp_hyst_c;
+
+		if (temp_c <= zones[THERM_ZONE_FIRST].temp_c)
+			info->pres_wireless_therm_zone = 0;
+		else if (temp_c >= max_temp)
+			info->pres_wireless_therm_zone = (num_zones - 1);
+		else if (temp_c >= hotter_t)
+			info->pres_wireless_therm_zone++;
+		else if (temp_c < colder_t)
+			info->pres_wireless_therm_zone--;
+	}
+
+	if (info->pres_wireless_therm_zone != THERM_ZONE_FIRST && info->pres_wireless_therm_zone < info->num_wireless_thermal_zones) {
+		target_fcc = zones[info->pres_wireless_therm_zone].chrg_limit_curr;
+		info->chrg_wireless_therm_limit_curr = target_fcc*1000;
+	}
+
+	pr_err("[cs_chrg] wireless batt temp_c %d, prev therm zone %d, pres therm zone %d, "
+						"target_fcc %duA, "
+						"hotter_t %dC, colder_t %dC\n",
+						temp_c, prev_zone, info->pres_wireless_therm_zone,
+						info->chrg_wireless_therm_limit_curr, hotter_t, colder_t);
+
+	if (prev_zone != info->pres_wireless_therm_zone) {
+		pr_err("[cs_chrg] wireless Entered Temp Zone %d!\n",
+			   info->pres_wireless_therm_zone);
+		return true;
+	}
+
+	return false;
+}
+
+#endif /* CONFIG_CHARGER_THERMAL_LIMIT */
+// drv add tankaikun, thermal charging limit, 20231130 end
 
 static bool support_fast_charging(struct mtk_charger *info)
 {
@@ -133,6 +607,30 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 	bool is_basic = false;
 	u32 ichg1_min = 0, aicr1_min = 0;
 	int ret;
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	union charger_propval wls_online = {0};
+	union charger_propval wls_type = {0};
+	union charger_propval wls_curr = {0};
+#endif
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+// drv add tankaikun, add step charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+	int vbat = 0;
+	int temp_zone = info->pres_temp_zone;
+
+	vbat = get_battery_voltage(info);
+	info->temp_zone_change = cs_find_temp_zone(info, info->battery_temp, true);
+	info->chrg_step_change = cs_find_chrg_step(info, temp_zone, vbat);
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
+// drv add tankaikun, add step charging, 20231130 end
+
+// drv add tankaikun, thermal charging limit, start
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+	cs_find_thmeral_zone(info, info->battery_temp);
+	cs_find_wireless_thmeral_zone(info, info->battery_temp);
+#endif /*CONFIG_CHARGER_THERMAL_LIMIT*/
+// drv add tankaikun, thermal charging limit, end
 
 	select_cv(info);
 
@@ -265,6 +763,135 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 
 	sc_select_charging_current(info, pdata);
 
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	if (info->wlchg1_dev) {
+		charger_dev_get_property(info->wlchg1_dev, CHARGER_PROP_WLS_CHG_ONLINE, &wls_online);
+		if (wls_online.intval) {
+			charger_dev_get_property(info->wlchg1_dev, CHARGER_PROP_WLS_CHG_TYPE, &wls_type);
+			charger_dev_get_property(info->wlchg1_dev, CHARGER_PROP_WLS_MAX_CURR_LIMIT, &wls_curr);
+			//if (wls_type.intval == WLS_CHARGER_TYPE_BPP)
+			//	pdata->input_current_limit = 1000000; // 5V 1A
+			//else if (wls_type.intval == WLS_CHARGER_TYPE_EPP_10W)
+			//	pdata->input_current_limit = 1100000; // 9V 1.1A
+			//else if (wls_type.intval == WLS_CHARGER_TYPE_EPP_15W)
+			//	pdata->input_current_limit = 1500000; // 9v 1.67A
+			//else
+			//	pdata->input_current_limit = 500000; // 5V 0.5A
+			pdata->input_current_limit = wls_curr.intval;
+			pdata->charging_current_limit = 4000000;
+
+			if(info->chrg_wireless_therm_limit_curr != -1 &&
+				info->chrg_wireless_therm_limit_curr < pdata->input_current_limit) {
+				pdata->input_current_limit = info->chrg_wireless_therm_limit_curr;
+			}
+		}
+		chr_err("%s, wls chg: online:%d type:%d icl:%d wtl:%d\n" , __func__, wls_online.intval,
+			wls_type.intval, pdata->input_current_limit, info->chrg_wireless_therm_limit_curr);
+	} else {
+		chr_err("%s, *** Error : can't find wireless charger ***\n" , __func__);
+	}
+#endif /* CONFIG_WIRELESS_MT5706 */
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
+// drv add wanwen, add bypass charger function, 20250610 start
+	if (info->cmd_bypass_charging) {
+		pdata->charging_current_limit = 0;
+		info->setting.charging_current_limit1 = 0;
+	}
+// drv add wanwen, add bypass charger function, 20250610 end
+
+// drv add tankaikun, add step charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+	if (info->chrg_step.chrg_step_cc_curr <= pdata->charging_current_limit) {
+		pdata->charging_current_limit = info->chrg_step.chrg_step_cc_curr;
+		info->setting.charging_current_limit1 = info->chrg_step.chrg_step_cc_curr;
+	} else {
+		info->setting.charging_current_limit1 = pdata->charging_current_limit;
+	}
+	info->setting.charging_current_cv_tapper = info->chrg_step.chrg_step_cc_curr;
+#endif /*CONFIG_CHARGER_STEP_CHARGE*/
+// drv add tankaikun, add step charging, 20231130 end
+
+// drv add tankaikun, add odm charger class, 20241015 start
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+	if (info->thermal_input_current_limit != -1) {
+		pdata->thermal_input_current_limit =
+				info->thermal_input_current_limit;
+	} else {
+		pdata->thermal_input_current_limit = -1;
+	}
+	if (info->thermal_charging_current_limit != -1) {
+		pdata->thermal_charging_current_limit =
+				info->thermal_charging_current_limit;
+	} else {
+		pdata->thermal_charging_current_limit = -1;
+	}
+
+	chr_err("%s [cs_chrg] thrm_icl:%d thrm_cur:%d \n", __func__,
+			pdata->thermal_input_current_limit,pdata->thermal_charging_current_limit);
+#endif /* CONFIG_CHARGER_THERMAL_LIMIT */
+// drv add tankaikun, add odm charger class, 20241015 end
+
+// drv add tankaikun, add for screen on charging 20230108 start
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+	info->setting.input_current_limit_dvchg1 = -1;
+	if (g_charge_is_screen_on) {
+		if (pdata->input_current_limit > 1000000) {
+			pdata->input_current_limit = 1000000;
+		}
+
+		// pe50: input limit 1A
+		if ((info->setting.input_current_limit_dvchg1 > 1000000)
+				|| (-1 == info->setting.input_current_limit_dvchg1))
+			info->setting.input_current_limit_dvchg1 = 1000000;
+
+		// pe pd: input limit 1A
+		if ((info->setting.input_current_limit1 > 1000000)
+				|| (-1 == info->setting.input_current_limit1))
+			info->setting.input_current_limit1 = 1000000;
+
+		// pe50: charging limit to be themal cur
+		if (pdata->thermal_charging_current_limit != -1
+				&& pdata->thermal_charging_current_limit < info->setting.charging_current_cv_tapper)
+			info->setting.charging_current_cv_tapper = pdata->thermal_charging_current_limit;
+
+		chr_err("screen_on icl:%d icl_dv:%d icl_sw:%d thl_cur:%d \n",
+				pdata->input_current_limit,info->setting.input_current_limit_dvchg1,
+				info->setting.input_current_limit1, info->setting.charging_current_cv_tapper);
+	}
+	else {
+		if (info->chrg_therm_limit_curr != -1 && info->chrg_therm_limit_curr != 0) {
+			if (info->setting.input_current_limit_dvchg1 > info->chrg_therm_limit_curr
+					|| (-1 == info->setting.input_current_limit_dvchg1))
+				info->setting.input_current_limit_dvchg1 = info->chrg_therm_limit_curr;
+
+			if (pdata->input_current_limit > info->chrg_therm_limit_curr){
+				pdata->input_current_limit = info->chrg_therm_limit_curr;
+				info->setting.input_current_limit1 = info->chrg_therm_limit_curr;
+			}
+			chr_err("screen_off thermal limit occur \n");
+		} else {
+			info->setting.input_current_limit1 = -1;
+			info->setting.input_current_limit_dvchg1 = -1;
+		}
+		goto skip_thermal_limit;
+	}
+	// second charge cur limit control by alg
+	pdata2->thermal_charging_current_limit = -1;
+	pdata2->thermal_input_current_limit = -1;
+#endif /* CONFIG_CHARGER_THERMAL_LIMIT */
+#endif /* CONFIG_DRM_MEDIATEK */
+// drv add tankaikun, add for screen on charging 20230108 end
+
+// drv add linaiyu, add bypass charger function, 20250630 start
+	if (1 == info->cmd_charge_power_limit)
+		info->setting.charging_current_limit1 = (int)pdata->input_current_limit / 2;
+	else if (2 == info->cmd_charge_power_limit)
+		info->setting.charging_current_limit1 = (int)pdata->input_current_limit / 3;
+// drv add linaiyu, add bypass charger function, 20250630 end
+
 	if (pdata->thermal_charging_current_limit != -1) {
 		if (pdata->thermal_charging_current_limit <=
 			pdata->charging_current_limit) {
@@ -287,7 +914,13 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 		}
 		pdata->thermal_throttle_record = true;
 	} else
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+		if (!g_charge_is_screen_on || 0 == info->setting.input_current_limit1) {
+			info->setting.input_current_limit1 = -1;
+		}
+#else
 		info->setting.input_current_limit1 = -1;
+#endif /* CONFIG_CHARGER_THERMAL_LIMIT */
 
 	if (pdata2->thermal_charging_current_limit != -1) {
 		if (pdata2->thermal_charging_current_limit <=
@@ -311,6 +944,12 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 	} else
 		info->setting.input_current_limit2 = -1;
 
+// drv add tankaikun, add for screen on charging 20230108 start
+#if IS_ENABLED(CONFIG_CHARGER_THERMAL_LIMIT)
+skip_thermal_limit:
+#endif /* CONFIG_CHARGER_THERMAL_LIMIT */
+// drv add tankaikun, add for screen on charging 20230108 end
+
 	if (is_basic == true && pdata->input_current_limit_by_aicl != -1
 		&& !info->charger_unlimited
 		&& !info->disable_aicl) {
@@ -319,8 +958,10 @@ static bool select_charging_current_limit(struct mtk_charger *info,
 			pdata->input_current_limit =
 					pdata->input_current_limit_by_aicl;
 	}
-	info->setting.input_current_limit_dvchg1 =
-		pdata_dvchg->thermal_input_current_limit;
+// drv add wanwen, The fast charging temperature rise strategy did not take effect. 20250711 start
+//	info->setting.input_current_limit_dvchg1 =
+//		pdata_dvchg->thermal_input_current_limit;
+// drv add wanwen, The fast charging temperature rise strategy did not take effect. 20250711 end
 
 done:
 
@@ -342,7 +983,7 @@ done:
 		is_basic = true;
 	}
 	/* For TC_018, pleasae don't modify the format */
-	chr_err("m:%d chg1:%d,%d,%d,%d chg2:%d,%d,%d,%d dvchg1:%d sc:%d %d %d type:%d:%d usb_unlimited:%d usbif:%d usbsm:%d aicl:%d atm:%d bm:%d b:%d\n",
+	chr_err("m:%d chg1:%d,%d,%d,%d chg2:%d,%d,%d,%d dvchg1:%d sc:%d %d %d type:%d:%d usb_unlimited:%d usbif:%d usbsm:%d aicl:%d atm:%d bm:%d b:%d d:%d\n",
 		info->config,
 		_uA_to_mA(pdata->thermal_input_current_limit),
 		_uA_to_mA(pdata->thermal_charging_current_limit),
@@ -360,7 +1001,16 @@ done:
 		info->usb_unlimited,
 		IS_ENABLED(CONFIG_USBIF_COMPLIANCE), info->usb_state,
 		pdata->input_current_limit_by_aicl, info->atm_enabled,
-		info->bootmode, is_basic);
+		info->bootmode, is_basic, info->is_chg_done);
+
+// drv add tankaikun, add step charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+	chr_err("ieoc:%d cv:%d,%d \n",
+		info->chrg_iterm,
+		info->setting.cv,
+		info->chrg_step.chrg_step_cv_volt);
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
+// drv add tankaikun, add step charging, 20231130 end
 
 	return is_basic;
 }
@@ -462,6 +1112,17 @@ static int do_algorithm(struct mtk_charger *info)
 				}
 				break;
 			} else if (ret == ALG_READY || ret == ALG_RUNNING) {
+				// Add for user fast charge control
+				if (!info->user_fast_charge_enabled) {
+					// If user requested fast charge to be disabled,
+					// stop the active fast charging algorithm, break
+					// out and fall back to basic. If algorithm is in
+					// ALG_READY state, leave it there. Fast charge
+					// will re-activate as soon as user enables it.
+					if (ret == ALG_RUNNING)
+						chg_alg_stop_algo(alg);
+					break;
+				}
 				is_basic = false;
 				if (info->alg_new_arbitration && !info->alg_unchangeable &&
 					(lst_rnd_alg_idx > -1)) {
@@ -502,6 +1163,12 @@ static int do_algorithm(struct mtk_charger *info)
 			pdata->input_current_limit);
 		charger_dev_set_charging_current(info->chg1_dev,
 			pdata->charging_current_limit);
+// drv add tankaikun, add ffc charging, 20231130 start
+#if IS_ENABLED(CONFIG_CHARGER_FFC_CHARGE)
+		charger_dev_set_eoc_current(info->chg1_dev,
+			(info->chrg_iterm*1000));
+#endif /* CONFIG_CHARGER_STEP_CHARGE&&CONFIG_CHARGER_FFC_CHARGE */
+// drv add tankaikun, add ffc charging, 20231130 end
 		info->lst_rnd_alg_idx = -1;
 
 		chr_debug("%s:old_cv=%d,cv=%d, vbat_mon_en=%d\n",
@@ -527,6 +1194,17 @@ static int do_algorithm(struct mtk_charger *info)
 			}
 		}
 	}
+// drv add tankaikun, add step charging, 20231227 start
+#if IS_ENABLED(CONFIG_CHARGER_STEP_CHARGE)
+	else if(info->chrg_step_change) {
+		if (info->old_cv == 0 || (info->old_cv != info->setting.cv)) {
+			charger_dev_set_constant_voltage(info->chg1_dev,
+				info->setting.cv);
+			info->old_cv = info->setting.cv;
+		}
+	}
+#endif /* CONFIG_CHARGER_STEP_CHARGE */
+// drv add tankaikun, add step charging, 20231227 end
 
 	if (pdata->input_current_limit == 0 ||
 	    pdata->charging_current_limit == 0)

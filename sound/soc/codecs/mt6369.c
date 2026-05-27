@@ -5795,6 +5795,40 @@ static int mt6369_rcv_acc_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+//begin sce drv zhangmeng add bring up audio on 20250421
+#if IS_ENABLED(CONFIG_MTK_HAC_SUPPORT)
+#include <linux/gpio/consumer.h>
+
+/* µ¼Èëhac_gpio.cÖÐµ¼³öµÄº¯Êý */
+extern int set_hac_status(bool enable);
+extern int get_hac_status(void);
+
+static void Hac_Switch_Change(bool enable)
+{
+    printk("%s() - Setting HAC to %d\n", __func__, enable ? 1 : 0);
+    if (set_hac_status(enable) != 0) {
+        printk("%s() - Failed to set HAC status\n", __func__);
+    }
+}
+
+static int Hac_Switch_Get(struct snd_kcontrol *kcontrol,
+                          struct snd_ctl_elem_value *ucontrol)
+{
+    int status = get_hac_status();
+    printk("%s() - HAC status: %d\n", __func__, status);
+    ucontrol->value.integer.value[0] = status;
+    return 0;
+}
+
+static int Hac_Switch_Set(struct snd_kcontrol *kcontrol,
+                          struct snd_ctl_elem_value *ucontrol)
+{
+    Hac_Switch_Change(ucontrol->value.integer.value[0]);
+    return 0;
+}
+#endif
+//end sce drv zhangmeng add bring up audio on 20250421
+
 static const struct snd_kcontrol_new mt6369_snd_misc_controls[] = {
 	SOC_ENUM_EXT("Headphone Plugged In", misc_control_enum[0],
 		     hp_plugged_in_get, hp_plugged_in_set),
@@ -5809,6 +5843,12 @@ static const struct snd_kcontrol_new mt6369_snd_misc_controls[] = {
 	SOC_ENUM_EXT("VOW codec type", misc_control_enum[0], vow_codec_type_get, NULL),
 	SOC_ENUM_EXT("VOW CIC type", misc_control_enum[0], vow_cic_type_get, NULL),
 #endif
+
+//begin sce drv zhangmeng add bring up audio on 20250421
+#if IS_ENABLED(CONFIG_MTK_HAC_SUPPORT)
+	SOC_ENUM_EXT("HAC_Switch", misc_control_enum[0], Hac_Switch_Get, Hac_Switch_Set),
+#endif
+//end sce drv zhangmeng add bring up audio on 20250421
 };
 
 static int mt6369_codec_init_reg(struct snd_soc_component *cmpnt)
@@ -5883,6 +5923,12 @@ static int mt6369_codec_init_reg(struct snd_soc_component *cmpnt)
 	return 0;
 }
 
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+extern int aw87xxx_add_codec_controls(void *codec);
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
+
 static int mt6369_codec_probe(struct snd_soc_component *cmpnt)
 {
 	struct mt6369_priv *priv = snd_soc_component_get_drvdata(cmpnt);
@@ -5905,6 +5951,18 @@ static int mt6369_codec_probe(struct snd_soc_component *cmpnt)
 	snd_soc_add_component_controls(cmpnt,
 				       mt6369_snd_vow_controls,
 				       ARRAY_SIZE(mt6369_snd_vow_controls));
+
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+	ret = aw87xxx_add_codec_controls((void *)cmpnt);
+	if (ret < 0) {
+		pr_err("%s: add_codec_controls failed, ret %d\n",
+		__func__, ret);
+		return ret;
+	}
+	pr_info("%s() add aw87xxx codec controls success \n", __func__);
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
 
 	priv->hp_current_calibrate_val = get_hp_current_calibrate_val(priv);
 

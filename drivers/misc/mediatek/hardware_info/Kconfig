@@ -1,0 +1,56 @@
+config PRIZE_HARDWARE_INFO
+	tristate "hardware_info"
+	default n
+	help
+	  hardware_info. If configures to be n, means devices doesn't support
+	  hardwareinfo functionality.
+
+config PRIZE_HARDWARE_INFO_LAVA_CUST
+	tristate "PRIZE_HARDWARE_INFO_LAVA_CUST"
+	depends on PRIZE_HARDWARE_INFO
+	default n
+	help
+	  This is customized hardware info requirement of LAVA from India
+	  Should only say Y for LAVA project
+
+config PRI_TYPEC_POSITIVE_NEGATIVE
+	tristate "PRI_TYPEC_POSITIVE_NEGATIVE"
+	default n
+	help
+	  Should only say Y for type C
+
+config PRI_TYPEC_CHG_DET
+	tristate "PRIZE_TYPEC_CHG_DET"
+	default n
+	help
+	  Should only say Y for type C
+	  
+config PRI_HARDWARE_INFO_BAT
+	tristate "PRI_HARDWARE_INFO_BAT"
+	default n
+	help
+	  Should only say Y for type C
+
+#DRV added by chenjiaxi, add lpddr 8802 info (for ufs kernel-5.10), start
+config PRIZE_HARDWARE_LPDDR_INFO
+	tristate "hardware lpddr info"
+	default n
+	help
+	  hardware lpddr info. If configures to be n, means devices doesn't support
+	  hardware lpddr info functionality.
+
+config PRIZE_HARDWARE_DISCRETE_LPDDR_INFO
+	tristate "hardware discrete lpddr info"
+	default n
+	help
+	  hardware discrete lpddr info. If configures to be y, means devices doesn't support
+	  hardware lpddr info functionality.      
+#DRV added by chenjiaxi, add lpddr 8802 info (for ufs kernel-5.10), end
+
+config PRI_HARDWARE_INFO_EFUSE
+	bool "eFUSE hardware info support"
+	depends on PRIZE_HARDWARE_INFO
+	default n
+	help
+	  Show eFUSE blown info in hardware info module(default *#8802#) or not
+

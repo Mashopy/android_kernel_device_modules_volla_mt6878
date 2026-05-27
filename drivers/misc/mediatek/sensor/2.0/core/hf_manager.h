@@ -135,7 +135,20 @@ struct hf_client {
 	pid_t pid;                     /* control thread pid */
 	pid_t ppid;                    /* poll thread pid */
 };
+/*awinic bob add start*/
+struct aw_i2c_data {
+	unsigned char len;
+	unsigned char flag;
+	unsigned char *buf;
+};
 
+struct SAR_SENSOR_DATA {
+	struct aw_i2c_data __user *data;
+	unsigned char num;
+};
+
+#define HF_AW_MANAGER_REQUEST_READ_STATUS     _IOWR('a', 9, struct SAR_SENSOR_DATA)
+/*awinic bob add end*/
 #define set_interrupt_timestamp(m, t) (atomic64_set(&m->timestamp, t))
 #define get_interrupt_timestamp(m) (atomic64_read(&m->timestamp))
 

@@ -209,3 +209,68 @@ config MTK_CHARGER_TYPE_DETECT
 
 
 source "$(KCONFIG_EXT_PREFIX)drivers/power/supply/ufcs/Kconfig"
+
+#driver add by zhaopengge, 20230723-----start
+# drv add tankaikun, 20231204 start
+
+config CHARGER_UPM6722
+	tristate "UPM6722 Divider Charger Driver"
+	help
+	  Say Y here to enable support of UPM6722 divider charger
+	  It is mainly used as divider charger for
+	  direct charge
+	  It depends on config MTK_CHARGER
+
+config BATTERY_SH366100
+	tristate "customer external gauge SH366100"
+	help
+	  Set to Yes if SH366100 is used.
+
+config WIRELESS_MT5706
+	tristate "MT5706 wireless charger driver"
+	default n
+	help
+		Say Y to enable support for Maxic wireless charger.
+		mt5706 wireless charger driver.
+
+config PRIZE_REVERE_CHARGING_MODE
+        bool "rever wireless charging"
+        help
+                Say Y to enable support for rever wireless charging
+
+config CHARGER_STEP_CHARGE
+	tristate "Step charge"
+	default n
+	help
+	  Say Y here to enable step charge
+	  and drivers.
+
+config CHARGER_FFC_CHARGE
+	tristate "ffc charge support"
+	default n
+	help
+	  Say Y here to enable ffc charge
+	  and drivers.
+
+config FACTORY_CHARGE
+	tristate "Factory charge node"
+	default n
+	help
+	  Say Y here to create factory charge class
+	  and drivers.
+
+config ODM_CHARGER_CLASS_SUPPORT
+	bool "odm charge node"
+	help
+	  Say Y here to create odm charge node
+	  and drivers.
+
+config CHARGER_THERMAL_LIMIT
+	tristate "thermal charge support"
+	depends on ODM_CHARGER_CLASS_SUPPORT
+	help
+	  Say Y here to enable screen on thermal control charge
+	  and drivers.
+
+#drv add tankaikun, 20231204 end
+#driver add by zhaopengge, 20230723-----end

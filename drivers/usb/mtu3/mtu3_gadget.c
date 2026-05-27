@@ -838,6 +838,18 @@ static void mtu3_gadget_init_eps(struct mtu3 *mtu)
 	}
 }
 
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 start
+extern void rt_pd_manager_update_usb_state(bool suspend);
+
+static void mtu3_usb_state_worker(struct work_struct *work)
+{
+    struct mtu3 *mtu = container_of(work, struct mtu3, usb_state_work);
+    dev_info(mtu->dev, "mtu3_usb_state_worker running\n");
+
+    rt_pd_manager_update_usb_state(mtu->usb_suspend_val);
+}
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 end
+
 int mtu3_gadget_setup(struct mtu3 *mtu)
 {
 	mtu->g.ops = &mtu3_gadget_ops;
@@ -851,6 +863,7 @@ int mtu3_gadget_setup(struct mtu3 *mtu)
 	mtu->delayed_status = false;
 
 	mtu3_gadget_init_eps(mtu);
+	INIT_WORK(&mtu->usb_state_work, mtu3_usb_state_worker);//add by wanwen,Increase the work queue to solve the dump problem. 20251105
 
 	return usb_add_gadget_udc(mtu->dev, &mtu->g);
 }
@@ -859,6 +872,8 @@ void mtu3_gadget_cleanup(struct mtu3 *mtu)
 {
 	usb_del_gadget_udc(&mtu->g);
 }
+
+/* sync usb state with rt_pd_manager.c, limit ibus */
 
 void mtu3_gadget_resume(struct mtu3 *mtu)
 {
@@ -869,9 +884,11 @@ void mtu3_gadget_resume(struct mtu3 *mtu)
 		mtu->gadget_driver->resume(&mtu->g);
 		spin_lock(&mtu->lock);
 	}
+	rt_pd_manager_update_usb_state(false);
 }
 
 /* called when SOF packets stop for 3+ msec or enters U3 */
+
 void mtu3_gadget_suspend(struct mtu3 *mtu)
 {
 	dev_info(mtu->dev, "gadget SUSPEND\n");
@@ -881,6 +898,10 @@ void mtu3_gadget_suspend(struct mtu3 *mtu)
 		mtu->gadget_driver->suspend(&mtu->g);
 		spin_lock(&mtu->lock);
 	}
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 start
+	mtu->usb_suspend_val = true;
+	schedule_work(&mtu->usb_state_work);
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 end
 }
 
 /* called when VBUS drops below session threshold, and in other cases */
@@ -903,6 +924,7 @@ void mtu3_gadget_disconnect(struct mtu3 *mtu)
 
 	mtu3_state_reset(mtu);
 	usb_gadget_set_state(&mtu->g, USB_STATE_NOTATTACHED);
+	rt_pd_manager_update_usb_state(false);
 }
 
 void mtu3_gadget_reset(struct mtu3 *mtu)
@@ -914,4 +936,6 @@ void mtu3_gadget_reset(struct mtu3 *mtu)
 		mtu3_gadget_disconnect(mtu);
 	else
 		mtu3_state_reset(mtu);
+
+	rt_pd_manager_update_usb_state(false);
 }

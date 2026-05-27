@@ -83,6 +83,7 @@ struct chg_alg_device {
 	bool is_polling_mode;
 	int alg_id;
 	int adapter_priority;
+	bool pe_ready_check_done;//drv-mod, pe50 check, 20230913
 };
 
 enum chg_alg_notifier_events {

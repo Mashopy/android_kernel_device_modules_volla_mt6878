@@ -22,6 +22,9 @@ obj-$(CONFIG_REGULATOR_MTK_VMM_ISP71) += mtk-vmm-isp71-regulator.o
 obj-$(CONFIG_REGULATOR_RT4803)	+= rt4803.o
 obj-$(CONFIG_REGULATOR_RT5133)  += rt5133-regulator.o
 obj-$(CONFIG_DEVICE_MODULES_REGULATOR_RT6160)	+= rt6160-regulator.o
+# prize add by chenwenhui for wl28681 start
+obj-$(CONFIG_REGULATOR_WL28681) += wl28681-regulator.o
+# prize add by chenwenhui for wl28681 end
 ifneq ($(wildcard $(srctree)/$(src)/k6878v1_64_alpha),)
 obj-$(CONFIG_REGULATOR_MT6878_ALPHA_SUPPORT) += k6878v1_64_alpha/
 endif

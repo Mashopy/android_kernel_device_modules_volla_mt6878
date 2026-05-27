@@ -22,6 +22,10 @@
 
 #include "extcon-mtk-usb.h"
 
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#include "../../../power/supply/mtk_charger.h"
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
 #if IS_ENABLED(CONFIG_TCPC_CLASS)
 #include "tcpm.h"
 #endif
@@ -194,9 +198,88 @@ fail:
 	return ret;
 }
 
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+static struct charger_device *primary_charger;
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+struct charger_device *wlchg1_dev;
+#endif /* CONFIG_WIRELESS_MT5706 */
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+static bool otg_swtich = false;
+
+static int mtk_usb_extcon_set_vbus_v1(bool is_on) {
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	int ret = 0;
+	union charger_propval wls_work_mode = {0};
+#endif /* CONFIG_WIRELESS_MT5706 */
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
+	if (otg_swtich == is_on) {
+		pr_err("gezi:----%s-----otg state same as befor:%d\n",__func__,otg_swtich);
+		return 0;
+	}
+
+	otg_swtich = is_on;
+
+	if (!primary_charger) {
+		primary_charger = get_charger_by_name("primary_chg");
+		if (!primary_charger) {
+			pr_info("%s: get primary charger device failed\n", __func__);
+			return -ENODEV;
+		}
+	}
+
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	if (!wlchg1_dev) {
+		wlchg1_dev = get_charger_by_name("wireless_chg");
+		if (!wlchg1_dev) {
+			pr_info("%s: get wls charger device failed\n", __func__);
+			return -ENODEV;
+		}
+    }
+		ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+		pr_err("extcon-usb wls_work_mode:%d \n", wls_work_mode.intval);
+		if (!ret && wls_work_mode.intval == WLS_WORK_MODE_TX) {
+			wls_work_mode.intval = 0;
+			ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_TX_ENABLE, &wls_work_mode);
+			if (ret)
+				pr_err("wls tx disable failed \n");
+		}
+#endif /* CONFIG_WIRELESS_MT5706 */
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
+	if (is_on) {
+		// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+		#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+		charger_dev_enable_otg(wlchg1_dev, true);
+		msleep(15);
+		#endif /* CONFIG_WIRELESS_MT5706 */
+		// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
+		charger_dev_enable_otg(primary_charger, true);
+		charger_dev_set_boost_current_limit(primary_charger,1500000);
+	} else {
+		charger_dev_enable_otg(primary_charger, false);
+
+		// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+		#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+		msleep(15);
+		charger_dev_enable_otg(wlchg1_dev, false);
+		#endif /* CONFIG_WIRELESS_MT5706 */
+		// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+	}
+	return 0;
+}
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
 static int mtk_usb_extcon_set_vbus(struct mtk_extcon_info *extcon,
 							bool is_on)
 {
+#if 1
+	mtk_usb_extcon_set_vbus_v1(is_on);
+#else
 	struct regulator *vbus = extcon->vbus;
 	struct device *dev = extcon->dev;
 	int ret;
@@ -238,6 +321,7 @@ static int mtk_usb_extcon_set_vbus(struct mtk_extcon_info *extcon,
 	}
 
 	extcon->vbus_on = is_on;
+#endif
 
 	return 0;
 }

@@ -22,6 +22,11 @@
 #include <linux/regmap.h>
 #include <linux/regulator/driver.h>
 #include <linux/workqueue.h>
+//add by wanwen,set otg voltage 5.5V 20250811 start
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio/consumer.h>
+//add by wanwen,set otg voltage 5.5V 20250811 end
 
 #include "charger_class.h"
 #include "mtk_charger.h"
@@ -133,6 +138,8 @@ enum mt6375_chg_reg_field {
 	F_AICC_RPT, F_AICC_ONESHOT,
 	/* MT6375_REG_OTG_LBP */
 	F_OTG_LBP,
+	/* MT6375_REG_OTG_V */
+	F_OTG_CV, //add by wanwen,set otg voltage 5.5V
 	/* MT6375_REG_OTG_C */
 	F_OTG_CC,
 	/* MT6375_REG_BAT_COMP */
@@ -372,6 +379,7 @@ static const struct mt6375_chg_range mt6375_chg_ranges[F_MAX] = {
 	[F_AICC_VTH] = MT6375_CHG_RANGE(3900, 13400, 100, 0, true),
 	[F_AICC_RPT] = MT6375_CHG_RANGE(100, 3225, 25, 2, false),
 	[F_OTG_LBP] = MT6375_CHG_RANGE(2700, 3800, 100, 4, false),
+	[F_OTG_CV] = MT6375_CHG_RANGE(4850, 5500, 25, 20, true), //add by wanwen,set otg voltage 5.5V
 	[F_OTG_CC] = MT6375_CHG_RANGE_T(mt6375_chg_otg_cc, true),
 	[F_IRCMP_V] = MT6375_CHG_RANGE(0, 224, 32, 0, false),
 	[F_IRCMP_R] = MT6375_CHG_RANGE(0, 116900, 16700, 0, false),
@@ -424,6 +432,7 @@ static const struct mt6375_chg_field mt6375_chg_fields[F_MAX] = {
 	MT6375_CHG_FIELD(F_AICC_EN, MT6375_REG_CHG_AICC1, 7, 7),
 	MT6375_CHG_FIELD(F_AICC_RPT, MT6375_REG_CHG_AICC2, 0, 6),
 	MT6375_CHG_FIELD(F_AICC_ONESHOT, MT6375_REG_CHG_AICC2, 7, 7),
+	MT6375_CHG_FIELD(F_OTG_CV, MT6375_REG_OTG_V, 0, 5), //add by wanwen,set otg voltage 5.5V
 	MT6375_CHG_FIELD(F_OTG_CC, MT6375_REG_OTG_C, 0, 2),
 	MT6375_CHG_FIELD(F_OTG_LBP, MT6375_REG_OTG_LBP, 0, 3),
 	MT6375_CHG_FIELD(F_IRCMP_V, MT6375_REG_BAT_COMP, 0, 2),
@@ -618,6 +627,10 @@ static int mt6375_chg_regulator_enable(struct regulator_dev *rdev)
 		mt6375_set_boost_param(ddata, false);
 		return ret;
 	}
+//add by wanwen,add regulator usage label,20251009 start
+	if (rdev->use_count == 0)
+		rdev->use_count = 1;
+//add by wanwen,add regulator usage label,20251009 end
 	return 0;
 }
 
@@ -1277,7 +1290,7 @@ static int mt6375_chg_get_property(struct power_supply *psy,
 		if (ddata->psy_usb_type[ddata->active_idx] == POWER_SUPPLY_USB_TYPE_SDP)
 			val->intval = 500000;
 		else if (ddata->psy_usb_type[ddata->active_idx] == POWER_SUPPLY_USB_TYPE_DCP)
-			val->intval = 3225000;
+			val->intval = 2000000; //add by wanwen,The regular adapter comes with a default 5V&2A.
 		else if (ddata->psy_usb_type[ddata->active_idx] == POWER_SUPPLY_USB_TYPE_CDP)
 			val->intval = 1500000;
 		else
@@ -1285,7 +1298,7 @@ static int mt6375_chg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		if (ddata->psy_usb_type[ddata->active_idx] == POWER_SUPPLY_USB_TYPE_DCP)
-			val->intval = 22000000;
+			val->intval = 5000000;//add by wanwen,The regular adapter comes with a default 5V&2A.
 		else
 			val->intval = 5000000;
 		break;
@@ -1378,6 +1391,7 @@ static int mt6375_chg_set_property(struct power_supply *psy,
 
 static char *mt6375_psy_supplied_to[] = {
 	"battery",
+	"ext-bat",
 	"mtk-master-charger",
 };
 
@@ -1927,6 +1941,55 @@ out:
 	return ret;
 }
 
+//add by wanwen,set otg voltage 5.5V 20250811 start
+static int mt6375_set_otg_cv(struct charger_device *chgdev, u32 uV)
+{
+	struct mt6375_chg_data *ddata = charger_get_data(chgdev);
+
+	pr_err("otg_cv=%d\n", uV);
+	return mt6375_chg_field_set(ddata, F_OTG_CV, U_TO_M(uV));
+}
+
+static int mt6375_set_otg_cc(struct charger_device *chgdev, u32 uA)
+{
+	struct mt6375_chg_data *ddata = charger_get_data(chgdev);
+
+	pr_err("otg_cc=%d\n", uA);
+	return mt6375_chg_field_set(ddata, F_OTG_CC, U_TO_M(uA));
+}
+
+static int mt6375_enable_otg(struct charger_device *chgdev, bool en)
+{
+	int ret;
+	struct mt6375_chg_data *ddata = charger_get_data(chgdev);
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+    struct charger_device *wlchg1_dev = NULL;
+    union charger_propval wls_work_mode = {0};
+#endif /* CONFIG_WIRELESS_MT5706 */
+
+//add by wanwen,set otg voltage 5.5V 20250811 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	if (en) {
+                wlchg1_dev = get_charger_by_name("wireless_chg");
+                if (NULL != wlchg1_dev) {
+                        ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+                        pr_err("wls_work_mode:%d\n", wls_work_mode.intval);
+                        if (wls_work_mode.intval == WLS_WORK_MODE_TX) {
+				mt6375_set_otg_cv(chgdev, 5500000);
+                        } else {
+				mt6375_set_otg_cv(chgdev, 5000000);
+			}
+		}
+	}
+#endif /* CONFIG_WIRELESS_MT5706 */
+//add by wanwen,set otg voltage 5.5V 20250811 end
+
+	ret = en ? mt6375_chg_regulator_enable(ddata->rdev) : mt6375_chg_regulator_disable(ddata->rdev);
+
+	return ret;
+}
+//add by wanwen,set otg voltage 5.5V 20250811 end
+
 static int mt6375_enable_discharge(struct charger_device *chgdev, bool en)
 {
 	int i, ret;
@@ -2391,6 +2454,10 @@ static const struct charger_ops mt6375_chg_ops = {
 	.reset_ta = mt6375_reset_pe_ta,
 	.enable_cable_drop_comp = mt6375_enable_pe_cable_drop_comp,
 	/* OTG */
+	//add by wanwen,set otg voltage 5.5V 20250811 start
+	.set_boost_current_limit = mt6375_set_otg_cc,
+	.enable_otg = mt6375_enable_otg,
+	//add by wanwen,set otg voltage 5.5V 20250811 end
 	.enable_discharge = mt6375_enable_discharge,
 	/* charger type detection */
 	.enable_chg_type_det = mt6375_enable_chg_type_det,

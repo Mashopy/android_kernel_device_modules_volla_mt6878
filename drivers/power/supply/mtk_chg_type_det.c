@@ -54,6 +54,12 @@ static int typec_attach_thread(void *data)
 	struct mtk_ctd_info *mci = data;
 	int ret = 0, i = 0, attach = 0;
 	union power_supply_propval val = {0,};
+//drv add tankaikun, mt5706 revere mode, 20250609 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	struct charger_device *wlchg1_dev = NULL;
+	union charger_propval wls_work_mode = {0};
+#endif /* CONFIG_WIRELESS_MT5706 */
+//drv add tankaikun, mt5706 revere mode, 20250609 end
 
 	dev_info(mci->dev, "%s ++\n", __func__);
 wait:
@@ -79,6 +85,21 @@ wait:
 
 		if (mci->bc12_sel[i] == MTK_CTD_BY_SUBPMIC_PWR_RDY)
 			continue;
+//drv add tankaikun, mt5706 revere mode, 20250609 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+		wlchg1_dev = get_charger_by_name("wireless_chg");
+		if (NULL != wlchg1_dev) {
+			ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+			pr_err("wls_work_mode:%d attach:%d\n", wls_work_mode.intval, attach);
+			if (!ret && wls_work_mode.intval == WLS_WORK_MODE_TX && attach > ATTACH_TYPE_NONE) {
+				wls_work_mode.intval = 0;
+				ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_TX_ENABLE, &wls_work_mode);
+				if (ret)
+					pr_err("wls tx disable failed \n");
+			}
+		}
+#endif /* CONFIG_WIRELESS_MT5706 */
+//drv add tankaikun, mt5706 revere mode, 20250609 end
 
 		val.intval = ONLINE(i, attach);
 		ret = power_supply_set_property(mci->bc12_psy[i],
@@ -160,9 +181,35 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 	int idx = pd_nb - mci->pd_nb;
 	struct tcp_notify *noti = data;
 	uint8_t old_state = TYPEC_UNATTACHED, new_state = TYPEC_UNATTACHED;
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+	struct charger_device *wlchg1_dev = NULL;
+	union charger_propval wls_work_mode = {0};
+	int ret;
+#endif /* CONFIG_WIRELESS_MT5706 */
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 end
 
 	switch (event) {
 	case TCP_NOTIFY_SINK_VBUS:
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+		wlchg1_dev = get_charger_by_name("wireless_chg");
+		if (!wlchg1_dev) {
+			pr_info("%s: get wls charger device failed\n", __func__);
+			return -ENODEV;
+		}
+
+		ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+		pr_err("extcon-usb wls_work_mode:%d \n", wls_work_mode.intval);
+		if (!ret && wls_work_mode.intval == WLS_WORK_MODE_TX) {
+			wls_work_mode.intval = 0;
+			ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_TX_ENABLE, &wls_work_mode);
+			if (ret)
+				pr_err("wls tx disable failed \n");
+			msleep(15);
+		}
+#endif
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 end
 		handle_audio_attach(mci, idx, noti);
 		break;
 	case TCP_NOTIFY_PD_STATE:
@@ -172,7 +219,42 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		old_state = noti->typec_state.old_state;
 		new_state = noti->typec_state.new_state;
 
+//drv add wanwen,get pd_vbus flag 20250715 start
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+		wlchg1_dev = get_charger_by_name("wireless_chg");
+		if (NULL != wlchg1_dev) {
+//drv add wanwen, Turn off wls chg when simulation earphone plug in. 20250716 start
+			if ((old_state == TYPEC_UNATTACHED) && (new_state == TYPEC_ATTACHED_AUDIO)) {
+				ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+				pr_err("extcon-usb wls_work_mode:%d \n", wls_work_mode.intval);
+				if (!ret && wls_work_mode.intval == WLS_WORK_MODE_TX) {
+					wls_work_mode.intval = 0;
+					ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_TX_ENABLE, &wls_work_mode);
+					if (ret)
+						pr_err("wls tx disable failed \n");
+				}
+				msleep(5);
+				wls_work_mode.intval = 2;
+				ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_RX_ENABLE, &wls_work_mode);
+				if (ret)
+					pr_err("wls rx disable failed \n");
+				msleep(5);
+			} else if ((old_state == TYPEC_ATTACHED_AUDIO) && (new_state == TYPEC_UNATTACHED)) {
+				wls_work_mode.intval = 1;
+				ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_RX_ENABLE, &wls_work_mode);
+				if (ret)
+					pr_err("wls rx enable failed \n");
+				msleep(5);
+			}
+//drv add wanwen, Turn on wls chag when simulation earphone plug out. 20250716 end
+			charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_PD_VBUS_MODE, &wls_work_mode);
+			pr_err("wls_work_pd_vbus:%d", wls_work_mode.intval);
+		}
+		if ((old_state == TYPEC_UNATTACHED) && (wls_work_mode.intval == WLS_WORK_MODE_NONE) &&
+#else
 		if (old_state == TYPEC_UNATTACHED &&
+#endif
+//drv add wanwen,get pd_vbus flag 20250715 end
 		    (new_state == TYPEC_ATTACHED_SNK ||
 		     new_state == TYPEC_ATTACHED_NORP_SRC ||
 		     new_state == TYPEC_ATTACHED_CUSTOM_SRC ||

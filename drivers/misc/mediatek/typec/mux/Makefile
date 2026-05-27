@@ -11,3 +11,6 @@ obj-$(CONFIG_TYPEC_MUX_PS5169) += ps5169.o
 obj-$(CONFIG_TYPEC_MUX_PS5170) += ps5170.o
 obj-$(CONFIG_TYPEC_MUX_PI3DPX1205A) += pi3dpx1205a.o
 obj-$(CONFIG_TYPEC_MUX_DP_SELECTOR) += usb_dp_selector.o
+# prize added by hanjiuping for hl5280 support start
+obj-$(CONFIG_TYPEC_AUDIO_FSA4480_SWITCH) += fsa4480-i2c.o
+# prize added by hanjiuping for hl5280 support end

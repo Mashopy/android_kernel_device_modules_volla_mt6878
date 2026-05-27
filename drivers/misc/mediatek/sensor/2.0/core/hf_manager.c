@@ -21,6 +21,47 @@
 #include <linux/log2.h>
 
 #include "hf_manager.h"
+//add by driver huangxinglve for sensor hardware_info 20250512 start
+#if IS_ENABLED(CONFIG_PRIZE_HARDWARE_INFO)
+#include "../../../hardware_info/hardware_info.h"
+#endif
+//add by driver huangxinglve for sensor hardware_info 20250512 end
+/*awinic bob add start*/
+#include <linux/vmalloc.h>
+#include <linux/unistd.h>
+#include <linux/delay.h>
+#include <linux/time.h>
+/*awinic bob add end*/
+
+/* awinic bob add start */
+#define AW_USB_PLUG_CAIL//mod by driver huangxinglve, 20250812, for sar sensor usb calibration
+
+#ifdef AW_USB_PLUG_CAIL
+#include <linux/vmalloc.h>
+#include <linux/notifier.h>
+#include <linux/usb.h>
+#include <linux/power_supply.h>
+#include <linux/regulator/consumer.h>
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#define USB_POWER_SUPPLY_NAME   "charger"
+#else
+#define USB_POWER_SUPPLY_NAME   "usb"
+#endif
+
+#define AW_SAR_CONFIG_MTK_CHARGER
+static bool present_flag = 0;//mod by driver huangxinglve, 20250812, for sar sensor usb calibration
+
+#endif
+/* awinic bob add end */
+/*awinic bob add start*/
+static uint32_t awinic_debug_data[3] = { 0 };
+static wait_queue_head_t g_aw_sar_wait;
+static struct hf_device *aw_g_device = NULL;
+struct mutex g_aw_sar_lock;
+
+/*awinic bob add end*/
 
 struct coordinate {
 	int8_t sign[3];
@@ -147,6 +188,19 @@ static int hf_manager_report_event(struct hf_client *client,
 		 */
 		return 0;
 	}
+
+	/*awinic bob add start*/
+	if (event->sensor_type == SENSOR_TYPE_SAR) {
+		pr_info("sar event->word[0]:0x%x, event->word[1]:0x%x, event->word[2]:0x%x\n",
+			event->word[0], event->word[1], event->word[2]);
+		if (event->word[0] == 0xff) {
+			pr_info("sar %s event->byte[0] == 0xff\n", __func__);
+			spin_unlock_irqrestore(&hf_fifo->buffer_lock, flags);
+			return 0;
+		}
+	}
+	/*awinic bob add end*/
+
 	hf_fifo->buffer[hf_fifo->head++] = *event;
 	hf_fifo->head &= hf_fifo->bufsize - 1;
 	/* remain 1 count */
@@ -358,6 +412,49 @@ int hf_manager_create(struct hf_device *device)
 			err = -EBUSY;
 			goto out_err;
 		}
+//add by driver huangxinglve for sensor hardware_info 20250512 start
+#if IS_ENABLED(CONFIG_PRIZE_HARDWARE_INFO)
+		if(sensor_type == SENSOR_TYPE_ACCELEROMETER)
+		{
+			strcpy(current_gsensor_info.chip, device->support_list[i].name);
+			strcpy(current_gsensor_info.vendor, device->support_list[i].vendor);
+			strcpy(current_gsensor_info.more, "gsensor");
+		}
+		else if(sensor_type == SENSOR_TYPE_LIGHT)
+		{
+			strcpy(current_alsps_info.chip, device->support_list[i].name);
+			strcpy(current_alsps_info.vendor, device->support_list[i].vendor);
+			strcpy(current_alsps_info.more, "alsps");
+		}
+		else if(sensor_type == SENSOR_TYPE_MAGNETIC_FIELD)
+		{
+			strcpy(current_msensor_info.chip, device->support_list[i].name);
+			strcpy(current_msensor_info.vendor, device->support_list[i].vendor);
+			strcpy(current_msensor_info.more, "msensor");
+		}
+		else if(sensor_type == SENSOR_TYPE_GYROSCOPE)
+		{
+			strcpy(current_gyroscope_info.chip, device->support_list[i].name);
+			strcpy(current_gyroscope_info.vendor, device->support_list[i].vendor);
+			strcpy(current_gyroscope_info.more, "gyroscope");
+		}
+		else if(sensor_type == SENSOR_TYPE_PRESSURE)
+		{
+			strcpy(current_barosensor_info.chip, device->support_list[i].name);
+			strcpy(current_barosensor_info.vendor, device->support_list[i].vendor);
+			strcpy(current_barosensor_info.more, "barometer");
+		}
+		else if(sensor_type == SENSOR_TYPE_SAR)
+		{
+			strcpy(current_sarsensor_info.chip, device->support_list[i].name);
+			strcpy(current_sarsensor_info.vendor, device->support_list[i].vendor);
+			strcpy(current_sarsensor_info.more, "sar");
+		}
+		else{
+			printk("other sensor\n");
+		}
+#endif
+//add by driver huangxinglve for sensor hardware_info 20250512 end
 	}
 
 	INIT_LIST_HEAD(&manager->list);
@@ -539,6 +636,24 @@ static int hf_manager_find_client(struct hf_core *core,
 	int err = 0;
 	unsigned long flags;
 	struct hf_client *client = NULL;
+
+	/*awinic bob add start*/
+	if (event->action == DATA_ACTION && event->sensor_type == SENSOR_TYPE_SAR) {
+				pr_info("sar rxh event->word[0]:0x%02x, event->word[1]:0x%02x, event->word[2]:0x%02x\n",
+				event->word[0], event->word[1], event->word[2]);
+		if (event->word[0] == 0xff) {
+			mutex_lock(&g_aw_sar_lock);
+			awinic_debug_data[1] = event->word[1];
+			awinic_debug_data[2] = event->word[2];
+			awinic_debug_data[0] = event->word[0];
+			mutex_unlock(&g_aw_sar_lock);
+
+			wake_up_interruptible(&g_aw_sar_wait);
+
+			return 0;
+		}
+	}
+	/*awinic bob add end*/
 
 	spin_lock_irqsave(&core->client_lock, flags);
 	list_for_each_entry(client, &core->client_list, list) {
@@ -1053,6 +1168,28 @@ err_out:
 	return ret;
 }
 
+/*awinic bob add start*/
+//volatile uint32_t awinic_debug_data[3];
+//static uint32_t awinic_debug_data[3] = { 0 };
+//static uint32_t awinic_debug_data_0 = 0;
+//static uint32_t awinic_debug_data_1 = 0;
+//static uint32_t awinic_debug_data_2 = 0;
+//EXPORT_SYMBOL(awinic_debug_data_0);
+//EXPORT_SYMBOL(awinic_debug_data_1);
+//EXPORT_SYMBOL(awinic_debug_data_2);
+
+//uint32_t *(* awinic_debug_g_val)(void) = NULL;
+//EXPORT_SYMBOL_GPL(awinic_debug_g_val);
+
+uint32_t *awinic_get_global_val(void)
+{
+	return &awinic_debug_data[0];
+}
+EXPORT_SYMBOL(awinic_get_global_val);
+
+//static struct hf_device *aw_g_device = NULL;
+/*awinic bob add end*/
+
 static int hf_manager_drive_device(struct hf_client *client,
 		struct hf_manager_cmd *cmd)
 {
@@ -1089,6 +1226,11 @@ static int hf_manager_drive_device(struct hf_client *client,
 	switch (cmd->action) {
 	case HF_MANAGER_SENSOR_ENABLE:
 	case HF_MANAGER_SENSOR_DISABLE:
+		//awinic bob add
+		if (sensor_type == SENSOR_TYPE_SAR) {
+			aw_g_device = device;
+		}
+		//awinic bob end
 		hf_manager_save_update_enable(client, cmd, &old);
 		err = hf_manager_device_enable(device, sensor_type);
 		if (err < 0)
@@ -1106,6 +1248,12 @@ static int hf_manager_drive_device(struct hf_client *client,
 	case HF_MANAGER_SENSOR_CONFIG_CALI:
 		err = hf_manager_device_config_cali(device,
 			sensor_type, cmd->data, cmd->length);
+
+		/*awinic bob add start*/
+		pr_info("sar sensor_type:%d length:%d\n",
+				sensor_type, cmd->length);
+		/*awinic bob add end*/
+
 		break;
 	case HF_MANAGER_SENSOR_SELFTEST:
 		err = hf_manager_device_selftest(device, sensor_type);
@@ -1435,6 +1583,31 @@ static unsigned int hf_manager_poll(struct file *filp,
 	return mask;
 }
 
+/*awinic bob add start*/
+void *aw_memdup_user(const void __user *src, size_t len)
+{
+	void *p = NULL;
+
+	/*
+	 * Always use GFP_KERNEL, since copy_from_user() can sleep and
+	 * cause pagefault, which makes it pointless to use GFP_NOFS
+	 * or GFP_ATOMIC.
+	 */
+	p = vzalloc(len);
+	if (!p) {
+		pr_err("sar vzalloc err!");
+		return p;
+	}
+
+	if (copy_from_user(p, src, len)) {
+		pr_err("sar copy_from_user src err!");
+		vfree(p);
+	}
+
+	return p;
+}
+/*awinic bob add end*/
+
 static long hf_manager_ioctl(struct file *filp,
 			unsigned int cmd, unsigned long arg)
 {
@@ -1447,12 +1620,34 @@ static long hf_manager_ioctl(struct file *filp,
 	struct custom_cmd *cust_cmd = NULL;
 	struct hf_device *device = NULL;
 
+	/*awinic bob add start*/
+	struct SAR_SENSOR_DATA aw_sar_sensor_data;
+	struct aw_i2c_data *i2c_data;
+	unsigned char __user **data_ptrs;
+	int i = 0;
+//	int err = 0;
+	int j = 0;
+	uint8_t buf[50] = { 0 };
+	/*awinic bob add end*/
+
 	memset(&packet, 0, sizeof(packet));
 
+	/*awinic bob add start*/
+	if (cmd != HF_AW_MANAGER_REQUEST_READ_STATUS) {
+		if (size != sizeof(struct ioctl_packet))
+			return -EINVAL;
+
+		if (copy_from_user(&packet, ubuf, sizeof(packet)))
+			return -EFAULT;
+	}
+	/*
 	if (size != sizeof(struct ioctl_packet))
 		return -EINVAL;
+
 	if (copy_from_user(&packet, ubuf, sizeof(packet)))
 		return -EFAULT;
+	*/
+	/*awinic bob add end*/
 	sensor_type = packet.sensor_type;
 	if (unlikely(sensor_type >= SENSOR_TYPE_SENSOR_MAX))
 		return -EINVAL;
@@ -1513,6 +1708,97 @@ static long hf_manager_ioctl(struct file *filp,
 		if (copy_to_user(ubuf, &packet, sizeof(packet)))
 			return -EFAULT;
 		break;
+	/*awinic bob add start*/
+	case HF_AW_MANAGER_REQUEST_READ_STATUS:
+	//	pr_info("sar HF_AW_MANAGER_REQUEST_READ_STATUS enter\n");
+		if (copy_from_user(&aw_sar_sensor_data,
+				(struct SAR_SENSOR_DATA __user *)arg,
+				sizeof(aw_sar_sensor_data))) {
+			pr_err("sar copy_from_user err!\n");
+			return -EFAULT;
+		}
+		//pr_info("sar data num: %d\n", aw_sar_sensor_data.num);
+
+		i2c_data = (struct aw_i2c_data *)aw_memdup_user(aw_sar_sensor_data.data,
+				aw_sar_sensor_data.num * sizeof(struct aw_i2c_data));
+		if (i2c_data == NULL) {
+			pr_err("sar aw_memdup_user err!\n");
+			return -1;
+		}
+
+		data_ptrs = vzalloc(aw_sar_sensor_data.num * sizeof(u8 __user *));
+		if (data_ptrs == NULL) {
+			pr_err("sar vzalloc err\n");
+			vfree(i2c_data);
+			return -1;
+		}
+
+		for (i = 0; i < aw_sar_sensor_data.num; i++) {
+			if (i2c_data[i].len > 256) {
+				pr_err("sar i2c_data[i].len > 256 err!\n");
+				goto free_cfg_data_hanld;
+			}
+
+			data_ptrs[i] = (unsigned char __user *)i2c_data[i].buf;
+			i2c_data[i].buf = aw_memdup_user(data_ptrs[i], i2c_data[i].len);
+			if (i2c_data[i].buf == NULL) {
+				goto free_cfg_data_hanld;
+				break;
+			}
+		}
+
+		if (aw_sar_sensor_data.num == 1) {
+			struct hf_manager_cmd manager_cmd;
+
+			manager_cmd.sensor_type = SENSOR_TYPE_SAR;
+			manager_cmd.action = HF_MANAGER_SENSOR_CONFIG_CALI;
+			manager_cmd.length = i2c_data[0].len;
+			memcpy(manager_cmd.data, &i2c_data[0].buf[0], i2c_data[0].len);
+			//pr_info("sar  %d %d\n", i2c_data[0].buf[0], i2c_data[0].len);
+
+			hf_manager_drive_device(client, &manager_cmd);
+		} else if (aw_sar_sensor_data.num == 2) {
+			struct hf_manager_cmd manager_cmd;
+			int32_t ret = 0;
+
+			manager_cmd.sensor_type = SENSOR_TYPE_SAR;
+			manager_cmd.action = HF_MANAGER_SENSOR_CONFIG_CALI;
+			manager_cmd.length = i2c_data[0].len;
+			memcpy(manager_cmd.data, &i2c_data[0].buf[0], i2c_data[0].len);
+
+			ret = hf_manager_drive_device(client, &manager_cmd);
+			//pr_info("sar ret = %d, len = %d\n", ret, i2c_data[0].len);
+
+			wait_event_interruptible_timeout(g_aw_sar_wait,
+						(awinic_debug_data[0] == 0xff) ? true : false,
+						msecs_to_jiffies(1000));
+			mutex_lock(&g_aw_sar_lock);
+			awinic_debug_data[0] = 0;
+
+			//pr_info("sar awinic_debug_data[0]:0x%x awinic_debug_data[1]:0x%x awinic_debug_data[2]:0x%x",
+			//	awinic_debug_data[0], awinic_debug_data[1], awinic_debug_data[2]);
+			snprintf(buf, 50, "0x%02x,0x%02x,0x%02x,0x%02x,",
+								(awinic_debug_data[1] >> 8) & 0xff,
+								(awinic_debug_data[1] >> 0) & 0xff,
+								(awinic_debug_data[2] >> 8) & 0xff,
+								(awinic_debug_data[2] >> 0) & 0xff);
+			pr_info("rxh addr:0x%02x%02x %s\n", i2c_data[0].buf[2], i2c_data[0].buf[3], buf);
+			if (copy_to_user(data_ptrs[1], buf, strlen(buf) + 1)) {
+				pr_err("sar copy_to_user err");
+			}
+			mutex_unlock(&g_aw_sar_lock);
+
+		}
+free_cfg_data_hanld:
+		for (j = 0; j < aw_sar_sensor_data.num; j++) {
+			if (i2c_data[j].buf != NULL) {
+				vfree(i2c_data[j].buf);
+			}
+		}
+		vfree(data_ptrs);
+		vfree(i2c_data);
+		return 0;
+/*awinic bob add end*/
 	default:
 		pr_err("Unknown command %u\n", cmd);
 		return -EINVAL;
@@ -1711,12 +1997,158 @@ static const struct proc_ops hf_manager_proc_fops = {
 	.proc_read           = seq_read,
 	.proc_lseek          = seq_lseek,
 };
+/* awinic bob add start */
+#ifdef AW_USB_PLUG_CAIL
 
+struct aw_sar_ps {
+	bool ps_is_present;
+	struct work_struct ps_notify_work;
+	struct notifier_block ps_notif;
+};
+
+static void aw_sar_ps_notify_callback_work(struct work_struct *work)
+{
+	pr_info("[%d %s]sar Usb insert,going to force calibrate\n", __LINE__, __FUNCTION__);
+	//mtk_nanohub_calibration_to_hub(ID_SAR);
+
+	if (aw_g_device != NULL) {
+		hf_manager_device_calibration(aw_g_device, SENSOR_TYPE_SAR);
+	} else {
+		pr_info("sar aw_g_device is NUll error!\n");
+	}
+}
+
+static int aw_sar_ps_get_state(struct power_supply *psy, bool *present)
+{
+	union power_supply_propval pval = { 0 };
+	int retval;
+
+#ifdef AW_SAR_CONFIG_MTK_CHARGER
+	retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS,//mod by driver huangxinglve, 20250812, for sar sensor usb calibration
+			&pval);
+#else
+	retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+			&pval);
+#endif
+	if (retval) {
+		pr_err("[%d]sar %s psy get property failed retval:%d !\n", __LINE__, psy->desc->name, retval);
+		return retval;
+	}
+	//mod by driver huangxinglve, 20250812, for sar sensor usb calibration start
+	if (strcmp(psy->desc->name, "battery") == 0) {
+//	if (strcmp(psy->desc->name, "mtk-master-charger") == 0) {
+		//*present = (pval.intval) ? true : false;
+		if(pval.intval == 1 || pval.intval == 3 || pval.intval == 4){//POWER_SUPPLY_STATUS_CHARGING:1 POWER_SUPPLY_STATUS_NOT_CHARGING:3 POWER_SUPPLY_STATUS_FULL:4
+			*present = 1;
+		}else if(pval.intval == 2) {//POWER_SUPPLY_STATUS_DISCHARGING:2
+			*present = 0;
+		}else {
+			*present = 0;
+			pr_info("[%d %s]hxl_ch_sar Unknow power supply status pval.intval:%d !\n", __LINE__, __FUNCTION__, pval.intval);
+		}
+
+		if(present_flag != *present){
+			pr_info("[%d]sar %s is %s\n", __LINE__, psy->desc->name,
+					(*present) ? "present" : "not present");
+		}
+		present_flag = *present;
+	}
+	//mod by driver huangxinglve, 20250812, for sar sensor usb calibration end
+
+	return 0;
+}
+
+static int aw_sar_ps_notify_callback(struct notifier_block *self,
+		unsigned long event, void *p)
+{
+	struct aw_sar_ps *aw_sar_ps_to_cail = container_of(self, struct aw_sar_ps, ps_notif);
+	struct power_supply *psy = p;
+	bool present;
+	int retval;
+	//pr_info("sar %s\n", __func__);
+	//mod by driver huangxinglve, 20250812, for sar sensor usb calibration start
+	psy = power_supply_get_by_name("battery");
+	if (psy){
+		//pr_info("[%d]sar %s name:%s\n", __LINE__, __func__, psy->desc->name);
+		if ((event == POWER_SUPPLY_PROP_STATUS)
+			 && psy->desc->get_property && psy->desc->name){
+
+			retval = aw_sar_ps_get_state(psy, &present);
+			//pr_info("[%d %s]sar1 retval:%d !\n", __LINE__, __func__, retval);
+			if (retval) {
+				return retval;
+			}
+			if (event == POWER_SUPPLY_PROP_STATUS) {
+				if (aw_sar_ps_to_cail->ps_is_present == present) {
+					//pr_err("[%d]sar ps present state not change\n", __LINE__);
+					return 0;
+				}else {
+					pr_err("[%d]sar ps present state change present:%d !\n", __LINE__, present);
+				}
+			}
+			aw_sar_ps_to_cail->ps_is_present = present;
+			schedule_work(&aw_sar_ps_to_cail->ps_notify_work);
+		}
+	}else {
+		pr_err("[%d]sar psy is NULL error!\n", __LINE__);
+	}
+	//mod by driver huangxinglve, 20250812, for sar sensor usb calibration end
+
+	return 0;
+}
+
+static int aw_sar_ps_notify_init(struct aw_sar_ps *aw_sar_ps_to_cail)
+{
+	struct power_supply *psy = NULL;
+	int ret = 0;
+
+	//pr_info("%s enter\n", __func__);
+	INIT_WORK(&aw_sar_ps_to_cail->ps_notify_work, aw_sar_ps_notify_callback_work);
+	aw_sar_ps_to_cail->ps_notif.notifier_call = aw_sar_ps_notify_callback;
+	ret = power_supply_reg_notifier(&aw_sar_ps_to_cail->ps_notif);
+	if (ret) {
+		pr_err("sar Unable to register ps_notifier: %d\n", ret);
+		return -1;
+	}
+	//psy = power_supply_get_by_name(USB_POWER_SUPPLY_NAME);
+	psy = power_supply_get_by_name("battery");//mod by driver huangxinglve, 20250812, for sar sensor usb calibration
+	if (psy) {
+		ret = aw_sar_ps_get_state(psy, &aw_sar_ps_to_cail->ps_is_present);
+		if (ret) {
+			pr_err("[%d]sar psy get property failed rc=%d\n", __LINE__, ret);
+			goto free_ps_notifier;
+		}
+	} else {
+		pr_err("sar psy is NULL error!\n");
+	}
+	return 0;
+
+free_ps_notifier:
+	power_supply_unreg_notifier(&aw_sar_ps_to_cail->ps_notif);
+
+	return -1;
+}
+#endif
+/* awinic bob add end*/
 static int __init hf_manager_init(void)
 {
 	int ret;
 	struct device *dev;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
+	/* awinic bob add start */
+#ifdef AW_USB_PLUG_CAIL
+	int err = 0;
+	struct aw_sar_ps *aw_sar_ps_to_cail = NULL;
+	aw_sar_ps_to_cail = kzalloc(sizeof(*aw_sar_ps_to_cail), GFP_KERNEL);
+	if (!aw_sar_ps_to_cail) {
+		err = -ENOMEM;
+		//mod by driver huangxinglve, 20250812, for sar sensor usb calibration start
+		kfree(aw_sar_ps_to_cail);
+		aw_sar_ps_to_cail = NULL;
+		//mod by driver huangxinglve, 20250812, for sar sensor usb calibration end
+	}
+#endif
+	/* awinic bob add end */
 
 	init_hf_core(&hfcore);
 
@@ -1746,6 +2178,17 @@ static int __init hf_manager_init(void)
 			&hf_manager_proc_fops, &hfcore))
 		pr_err("Failed to create proc\n");
 
+
+	/* awinic bob add start */
+#ifdef AW_USB_PLUG_CAIL
+	pr_err("sar usb_plug_cail\n");
+	ret = aw_sar_ps_notify_init(aw_sar_ps_to_cail);
+	if (ret < 0) {
+		pr_err("sar error creating power supply notify\n");
+		power_supply_unreg_notifier(&aw_sar_ps_to_cail->ps_notif);//mod by driver huangxinglve, 20250812, for sar sensor usb calibration
+	}
+#endif
+	/* awinic bob add end */
 	hfcore.kworker = kthread_create_worker(0, "hf_manager");
 	if (IS_ERR(hfcore.kworker)) {
 		pr_err("Failed to create kthread\n");
@@ -1754,14 +2197,19 @@ static int __init hf_manager_init(void)
 		goto err_device;
 	}
 	sched_setscheduler_nocheck(hfcore.kworker->task, SCHED_FIFO, &param);
-	return 0;
+	//awinic bob add start
+	init_waitqueue_head(&g_aw_sar_wait);
+	mutex_init(&g_aw_sar_lock);
+	//awinic bob add end
 
+	return 0;
 err_device:
 	device_destroy(hf_manager_class, MKDEV(hf_manager_major, 0));
 err_class:
 	class_destroy(hf_manager_class);
 err_chredev:
 	unregister_chrdev(hf_manager_major, "hf_manager");
+
 err_exit:
 	return ret;
 }

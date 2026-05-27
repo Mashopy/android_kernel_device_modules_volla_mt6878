@@ -22,6 +22,7 @@ enum sensor_comm_ctrl_cmd {
 	SENS_COMM_CTRL_TIMESYNC_CMD,
 	SENS_COMM_CTRL_SHARE_MEMORY_CMD,
 	SENS_COMM_CTRL_DEBUG_CMD,
+	CUST_ACTION_SET_ALS_PARAM,//add by huangxinglve, 20250526, add for als calibration
 	MAX_SENS_COMM_CTRL_CMD,
 };
 

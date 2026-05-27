@@ -393,6 +393,17 @@
 #define GC13A2_SENSOR_ID                        0x13a2
 #define S5KGN9SP_SENSOR_ID                      0x08E9
 
+/*prize add by zhuzhengjiang add for camera 202403 start*/
+#define OV08D10WIDE_SENSOR_ID                   0x560847
+#define SENSOR_DRVNAME_OV08D10WIDE_MIPI_RAW     "ov08d10wide_mipi_raw"
+#define OV08C10_SENSOR_ID                       0x560842
+#define SENSOR_DRVNAME_OV08C10_MIPI_RAW         "ov08c10_mipi_raw"
+#define OV50E40_SENSOR_ID                       0x565045
+#define SENSOR_DRVNAME_OV50E40_MIPI_RAW         "ov50e40_mipi_raw"
+#define S5KJN1SUB_SENSOR_ID                     0x38E1+1
+#define SENSOR_DRVNAME_S5KJN1SUB_MIPI_RAW       "s5kjn1sub_mipi_raw"
+/*prize add by zhuzhengjiang add for camera 202403 end*/
+
 /* CAMERA DRIVER NAME */
 #define CAMERA_HW_DEVNAME                       "kd_camera_hw"
 /* SENSOR DEVICE DRIVER NAME */

@@ -2962,9 +2962,13 @@ irqreturn_t mtk_dsi_irq_status(int irq, void *dev_id)
 				wake_up_interruptible(&(mtk_crtc->signal_irq_for_pre_fence_wq));
 			}
 
+			//drv fix hbm shining questions 20250623 sync with S50 start
 			if (mtk_drm_helper_get_opt(priv->helper_opt,
-							   MTK_DRM_OPT_HBM))
+							   MTK_DRM_OPT_HBM)) {
 				wakeup_dsi_wq(&dsi->te_rdy);
+				mtk_crtc->last_te_time = sched_clock();
+			}
+			//drv fix hbm shining questions 20250623 sync with S50 end
 
 			if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp)) {
 				panel_ext = dsi->ext;
@@ -11021,6 +11025,23 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 			DDPINFO("%s: DSI_HBM_WAIT failed\n", __func__);
 		break;
 	}
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	case DSI_HBM_TO_LAST_TE:
+	{
+		struct mtk_drm_crtc *crtc = comp->mtk_crtc;
+		unsigned long long *hbm_to_last_te =
+			(unsigned long long *)params;
+
+		if (crtc->last_te_time > 0)
+			*hbm_to_last_te = local_clock() - crtc->last_te_time;
+		else
+			*hbm_to_last_te = 0;
+
+		DDPINFO("%s: hbm_to_last_te = %llu ns\n", __func__,
+			*hbm_to_last_te);
+		break;
+	}
+	//drv fix hbm shining questions 20250623 sync with S50 end
 	case LCM_ATA_CHECK:
 	{
 		struct mtk_dsi *dsi =
@@ -11730,6 +11751,68 @@ static int mtk_dsi_set_partial_update(struct mtk_ddp_comp *comp,
 	return 0;
 }
 
+// Sysfs
+// HBM
+static ssize_t hbm_show(struct device *dev, struct device_attribute *attr,
+            char *buf)
+{
+    struct mtk_dsi *dsi = dev_get_drvdata(dev);
+    struct mtk_panel_ext *ext = dsi->ext;
+    bool hbm = false;
+
+    if (ext && ext->funcs && ext->funcs->hbm_get_state)
+        ext->funcs->hbm_get_state(dsi->panel, &hbm);
+    else
+        DDPPR_ERR("%s: hbm_get_state is NULL\n", __func__);
+
+    return scnprintf(buf, PAGE_SIZE, "%d\n", hbm);
+}
+
+static ssize_t hbm_store(struct device *dev, struct device_attribute *attr,
+             const char *buf, size_t count)
+{
+    struct mtk_dsi *dsi = dev_get_drvdata(dev);
+    struct drm_crtc *crtc = dsi->encoder.crtc;
+    bool hbm_en = false;
+    int ret = 0;
+
+    ret = kstrtobool(buf, &hbm_en);
+    if (ret)
+        return ret;
+
+    ret = mtk_drm_crtc_set_panel_hbm(crtc, hbm_en);
+    if (ret)
+        return ret;
+
+    return count;
+}
+
+static DEVICE_ATTR_RW(hbm);
+
+// Initialization
+static struct attribute *mtk_dsi_attrs[] = {
+    &dev_attr_hbm.attr,
+    NULL,
+};
+
+static const struct attribute_group mtk_dsi_attr_group = {
+    .attrs = mtk_dsi_attrs,
+};
+
+static int mtk_dsi_sysfs_init(struct mtk_dsi *dsi)
+{
+    int ret = 0;
+
+    ret = sysfs_create_group(&dsi->dev->kobj, &mtk_dsi_attr_group);
+    if (ret) {
+        DDPPR_ERR("%s: failed to create sysfs group\n", __func__);
+        return ret;
+    }
+
+    return 0;
+}
+// End Sysfs
+
 static const struct mtk_ddp_comp_funcs mtk_dsi_funcs = {
 	.config = mtk_dsi_ddp_config,
 	.first_cfg = mtk_dsi_first_cfg,
@@ -12367,6 +12450,12 @@ static int mtk_dsi_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, dsi);
+
+	// Initialize our sysfs
+	ret = mtk_dsi_sysfs_init(dsi);
+	if (ret) {
+		dev_err(dev, "Failed to initialize sysfs: %d\n", ret);
+	}
 
 	ret = component_add(&pdev->dev, &mtk_dsi_component_ops);
 	if (ret != 0) {

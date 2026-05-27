@@ -13,6 +13,9 @@ config DEVICE_MODULES_SND_SOC_ALL_CODECS
 	imply DEVICE_MODULES_SND_SOC_MT6369
 	imply DEVICE_MODULES_SND_SOC_HDMI_CODEC
 	imply SND_SOC_RT5512
+#drv add by pengzhipeng 20220606 start
+	imply SND_SOC_AW87XXX
+#drv add by pengzhipeng 20220606 end
 	imply SND_SOC_TFA9874
 	help
 	  Normally ASoC codec drivers are only built if a machine driver which
@@ -158,5 +161,20 @@ config SND_SOC_MT6681_ACCDET
 	  MediaTek develop it for ASoC codec soc-jack
 	  detection mechanism. Select N if you don't
 	  have jack on board.
+
+#begin sce drv zhangmeng add bring up audio on 20250421
+config SND_SOC_AW87XXX
+	tristate "SoC Audio for awinic AW87XXX Smart K PA"
+	depends on I2C
+	help
+		This option enables support for AW87XXX Smart K PA.
+
+config MTK_HAC_SUPPORT
+        tristate "HAC for awinic aw881xx series"
+        default n
+        help
+          This option enables support for HAC.
+
+#end sce drv zhangmeng add bring up audio on 20250421
 
 endmenu

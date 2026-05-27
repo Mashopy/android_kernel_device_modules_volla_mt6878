@@ -39,10 +39,10 @@ int pe50_get_log_level(void)
 #define PE50_DVCHG_VBUSALM_GAP	100	/* mV */
 #define PE50_DVCHG_STARTUP_CONVERT_RATIO	210	/* % */
 #define PE50_DVCHG_CHARGING_CONVERT_RATIO	202	/* % */
-#define PE50_VBUSOVP_RATIO	110
-#define PE50_IBUSOCP_RATIO	110
-#define PE50_VBATOVP_RATIO	110
-#define PE50_IBATOCP_RATIO	110
+#define PE50_VBUSOVP_RATIO	150
+#define PE50_IBUSOCP_RATIO	150
+#define PE50_VBATOVP_RATIO	120
+#define PE50_IBATOCP_RATIO	150
 #define PE50_ITAOCP_RATIO	110
 #define PE50_IBUSUCPF_RECHECK		250	/* mA */
 #define PE50_VBUS_CALI_THRESHOLD	150	/* mV */
@@ -54,10 +54,16 @@ int pe50_get_log_level(void)
 #define PE50_MEASURE_R_AVG_TIMES	10
 #define PE50_VSYS_UPPER_BOUND            4700    /* mV */
 #define PE50_VSYS_UPPER_BOUND_GAP        40      /* mV */
-#define PE50_START_SOC_MAX_GAP		4	/* % */
+#define PE50_START_SOC_MAX_GAP		0	/* % */
 #define PE50_WHILE_LOOP_ITERATION_MAX	50
-
-
+/* pri LAX10-445 LAX10-608add by lvyuanchuan 20240517 begin*/
+#define PE50_CV_DOWN_GAP         30      /* mV */
+/* pri X91V-22 modify by suwenwei 20250225 */
+#define PE50_CV_UPPER_GAP        0      /* mV */
+#define PE50_SLAVE_OFF_GAP       100      /* mV */
+#define PE50_VTA_RETRY		     8000	/* mV */
+#define PE50_ITA_RETRY		     1000	/* mA */
+/* pri LAX10-445 LAX10-608 add by lvyuanchuan 20240517 end*/
 #define PE50_HWERR_NOTIFY \
 	(BIT(EVT_VBUSOVP) | BIT(EVT_IBUSOCP) | BIT(EVT_VBATOVP) | \
 	 BIT(EVT_IBATOCP) | BIT(EVT_VOUTOVP) | BIT(EVT_VDROVP) | \
@@ -77,24 +83,25 @@ static const char *const pe50_algo_state_name[PE50_ALGO_STATE_MAX] = {
 /* If there's no property in dts, these values will be applied */
 static const struct pe50_algo_desc algo_desc_defval = {
 	.polling_interval = 500,
-	.vbat_cv = 4350,
-	.start_soc_min = 5,
-	.start_soc_max = 80,
-	.stop_soc_max = 99,
+	.vbat_cv = 4450,
+	.start_soc_min = 1,
+	.start_soc_max = 90,
+	.stop_soc_max = 95,
 	.vbat_max_gap = 30,
+	/* pri X91V-22 modify by suwenwei 20250225 */
 	.idvchg_term = 500,
 	.idvchg_step = 50,
-	.ita_level = {3000, 2700, 2400, 2000},
-	.rcable_level = {250, 278, 313, 375},
-	.ita_level_dual = {4000, 3700, 3400, 3000},
-	.rcable_level_dual = {188, 203, 221, 250},
+	.ita_level = {3000, 2500, 2000, 1500},
+	.rcable_level = {250, 300, 375, 500},
+	.ita_level_dual = {6000, 5000, 4000, 3000},
+	.rcable_level_dual = {230, 350, 450, 550},
 	.idvchg_ss_init = 1000,
 	.idvchg_ss_step = 250,
 	.idvchg_ss_step1 = 100,
 	.idvchg_ss_step2 = 50,
 	.idvchg_ss_step1_vbat = 4000,
 	.idvchg_ss_step2_vbat = 4200,
-	.ta_blanking = 285,
+	.ta_blanking = 400,
 	.swchg_aicr = 0,
 	.swchg_ichg = 0,
 	.swchg_aicr_ss_init = 400,
@@ -105,8 +112,8 @@ static const struct pe50_algo_desc algo_desc_defval = {
 	.tta_level_def = {0, 0, 0, 0, 25, 40, 50, 60, 70},
 	.tta_curlmt = {0, 0, 0, 0, 0, 300, 600, 900, -1},
 	.tta_recovery_area = 3,
-	.tbat_level_def = {0, 0, 0, 5, 25, 40, 50, 55, 60},
-	.tbat_curlmt = {-1, -1, -1, 300, 0, 300, 600, 900, -1},
+	.tbat_level_def = {15, 15, 15, 15, 15, 35, 45, 45, 45},
+	.tbat_curlmt = {-1, -1, -1, -1, 0, 0, 0, -1, -1},
 	.tbat_recovery_area = 3,
 	.tdvchg_level_def = {0, 0, 0, 5, 25, 55, 60, 65, 70},
 	.tdvchg_curlmt = {-1, -1, -1, 300, 0, 300, 600, 900, -1},
@@ -117,7 +124,7 @@ static const struct pe50_algo_desc algo_desc_defval = {
 	.ifod_threshold = 200,
 	.rsw_min = 20,
 	.ircmp_rbat = 40,
-	.ircmp_vclamp = 0,
+	.ircmp_vclamp = 30,//add by wanwen,Add fast charging ir 20250822
 	.vta_cap_min = 6800,
 	.vta_cap_max = 11000,
 	.ita_cap_min = 1000,
@@ -352,8 +359,11 @@ static u32 pe50_get_ita_pwr_lmt_by_vta(struct pe50_algo_info *info, u32 vta)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
 	u32 ita_pwr_lmt;
-
-	if (!auth_data->pwr_lmt)
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+	/*if (!auth_data->pwr_lmt)*/
+	PE50_INFO("pwr_lmt(%d),pdp(%d)\n", auth_data->pwr_lmt, auth_data->pdp);
+	if (!auth_data->pwr_lmt || !auth_data->pdp)
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 		return data->ita_lmt;
 
 	ita_pwr_lmt = precise_div(auth_data->pdp * 1000000, vta);
@@ -699,7 +709,54 @@ out:
 		  data->vbat_cv, desc->vbat_cv, cv_limit,
 		  data->vbat_cv_no_ircmp, data->cv_lower_bound);
 }
+/* pri LAX10-339 add by lvyuanchuan 20240325 begin */
+static inline int pe50_check_jeita_lmt(int vol , struct jeita_table_t *jeita_table)
+{
+	u8 i = 0;
 
+	if(!jeita_table)
+		return -1;
+	for(i = 0; i < jeita_table->pro_nums; i++){
+		if(vol && (vol < jeita_table->profile[i].voltage)){
+			break;
+		}
+	}
+	return jeita_table->profile[i].ibatmax / 2;
+}
+
+static inline int pe50_select_jeita_lmt(struct pe50_algo_info *info)
+{
+	int ret = 0, vbat = 0,jeita_lmt = -1;
+	struct pe50_algo_desc *desc = info->desc;
+	struct pe50_algo_data *data = info->data;
+
+	ret = pe50_get_adc(info, PE50_ADCCHAN_VBAT, &vbat);
+	if (ret < 0) {
+		PE50_ERR("get vbat fail(%d)\n", ret);
+		return ret;
+	}
+
+	switch (data->tbat_level) {
+	case PE50_THERMAL_COOL:
+		jeita_lmt = pe50_check_jeita_lmt(vbat, &desc->jeita.jeita_table[0]);
+		break;
+	case PE50_THERMAL_NORMAL:
+		jeita_lmt = pe50_check_jeita_lmt(vbat, &desc->jeita.jeita_table[0]);
+		break;
+	case PE50_THERMAL_WARM:
+		jeita_lmt = pe50_check_jeita_lmt(vbat, &desc->jeita.jeita_table[1]);
+		break;
+	case PE50_THERMAL_VERY_WARM:
+		jeita_lmt = pe50_check_jeita_lmt(vbat, &desc->jeita.jeita_table[1]);
+		break;
+	default:
+		PE50_ERR("tbat is too cold or high!\n");
+		break;
+	}
+	PE50_INFO("(vbat,tbat_level)(%d,%d),jeita_lmt(%d)\n", vbat, data->tbat_level, jeita_lmt);
+	return jeita_lmt;
+}
+/* pri LAX10-339 add by lvyuanchuan 20240325 end */
 /*
  * Select current limit according to severial status
  * If switching charger is charging, add AICR setting to ita
@@ -717,20 +774,27 @@ static inline int pe50_get_ita_lmt(struct pe50_algo_info *info)
 	struct pe50_algo_desc *desc = info->desc;
 	const int ita_lmt = data->ita_lmt;
 	int ita = data->ita_lmt;
+	int jeita_lmt = -1;
 
 	mutex_lock(&data->ext_lock);
 	if (data->input_current_limit >= 0)
 		ita = min(ita, data->input_current_limit);
 	if (data->ita_pwr_lmt > 0)
 		ita = min(ita, (int)data->ita_pwr_lmt);
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+	jeita_lmt = pe50_select_jeita_lmt(info);
+	if (jeita_lmt > 0)
+		ita = min(ita, jeita_lmt);
+
 	ita = min(ita, ita_lmt - desc->tta_curlmt[data->tta_level]);
 	ita = min(ita, ita_lmt - desc->tbat_curlmt[data->tbat_level]);
 	ita = min(ita, ita_lmt - desc->tdvchg_curlmt[data->tdvchg_level]);
-	PE50_INFO("ita(org,tta,tbat,tdvchg,prlmt,throt)=%d(%d,%d,%d,%d,%d,%d)\n",
+	PE50_INFO("ita(org,tta,tbat,tdvchg,prlmt,throt,jeita)=%d(%d,%d,%d,%d,%d,%d,%d)\n",
 		 ita, ita_lmt, desc->tta_curlmt[data->tta_level],
 		 desc->tbat_curlmt[data->tbat_level],
 		 desc->tdvchg_curlmt[data->tdvchg_level], data->ita_pwr_lmt,
-		 data->input_current_limit);
+		 data->input_current_limit, jeita_lmt);
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 	mutex_unlock(&data->ext_lock);
 	return ita < 0 ? 0 : ita;
 }
@@ -769,23 +833,30 @@ static u32 pe50_get_dvchg_vbusovp(struct pe50_algo_info *info, u32 ita)
 }
 
 /* Calculate IBUSOC S/W level */
+/* pri LAX10-445 add by lvyuanchuan 20240508 begin */
 static u32 pe50_get_dvchg_ibusocp(struct pe50_algo_info *info, u32 ita)
 {
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	u32 ibus, ratio = PE50_IBUSOCP_RATIO;
-
+	bool en = false;
 	ibus = data->is_swchg_en ?
 	       (ita > data->aicr_setting ? ita - data->aicr_setting : 0) : ita;
 	/* Add 10% for unbalance tolerance */
 	if (data->is_dvchg_en[PE50_DVCHG_SLAVE]) {
-		ibus = precise_div(ibus, 2);
-		ratio += 10;
+		pe50_hal_is_enabled(info->alg, DVCHG2, &en);
+		if (en) {
+			ibus = precise_div(ibus, 2);
+			ratio += 10;
+		}
 	}
 	ibus = max(ibus, desc->idvchg_term);
-	return percent(ibus, ratio);
-}
 
+	PE50_INFO("ibusocp(ibus,ita,is_dvchg_en,ratio)=(%d,%d,%d,%d)\n", ibus,
+		 ita, data->is_dvchg_en[PE50_DVCHG_SLAVE],ratio);
+	return percent(ibus, ratio) < 2000 ? 2000:percent(ibus, ratio);//add by wanwen,fix upm6722 ocp issue,20250827
+}
+/* pri LAX10-445 add by lvyuanchuan 20240508 end */
 /* Calculate VBATOV S/W level */
 static u32 pe50_get_vbatovp(struct pe50_algo_info *info)
 {
@@ -815,6 +886,8 @@ static int pe50_set_dvchg_protection(struct pe50_algo_info *info)
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
 	u32 ita_lmt, vbusovp, vbusovp_alarm, ibusocp, vbatovp, ibatocp;
+	/* pri X100S2-212 modify by suwenwei 20240914 */
+	u32 ibus;
 
 	/* VBATOVP ALARM */
 	ret = pe50_hal_set_vbatovp_alarm(info->alg, DVCHG1,
@@ -850,6 +923,15 @@ static int pe50_set_dvchg_protection(struct pe50_algo_info *info)
 	}
 
 	/* IBUSOCP */
+	/* pri X100S2-212 modify by suwenwei 20240914 start */
+	ret = pe50_get_adc(info, PE50_ADCCHAN_IBUS, &ibus);
+	if (ret < 0)
+		PE50_ERR("get CHG1 ibus fail\n");
+	PE50_INFO("ibus,ita_lmt = (%d,%d)\n", ibus, ita_lmt);
+	if (ibus * 1000 > ita_lmt * 1200) {
+		ita_lmt = ibus;
+	}
+	/* pri X100S2-212 modify by suwenwei 20240914 end */
 	ibusocp = pe50_get_dvchg_ibusocp(info, ita_lmt);
 	ret = pe50_hal_set_ibusocp(info->alg, DVCHG1, ibusocp);
 	if (ret < 0) {
@@ -929,7 +1011,7 @@ static int pe50_set_dvchg_charging(struct pe50_algo_info *info, bool en)
 	if (en) {
 		ret = pe50_hal_enable_hz(info->alg, CHG1, true);
 		if (ret < 0) {
-			PE50_ERR("en swchg hz fail(%d)\n", ret);
+			PE50_ERR("set swchg hz fail(%d)\n", ret);
 			return ret;
 		}
 	}
@@ -972,12 +1054,12 @@ static int pe50_enable_swchg_charging(struct pe50_algo_info *info, bool en)
 	} else {
 		ret = pe50_hal_enable_hz(info->alg, CHG1, true);
 		if (ret < 0) {
-			PE50_ERR("en swchg hz fail(%d)\n", ret);
+			PE50_ERR("set swchg hz fail(%d)\n", ret);
 			return ret;
 		}
 		ret = pe50_hal_enable_charging(info->alg, CHG1, false);
 		if (ret < 0) {
-			PE50_ERR("disable swchg fail(%d)\n", ret);
+			PE50_ERR("en swchg fail(%d)\n", ret);
 			return ret;
 		}
 	}
@@ -1109,11 +1191,16 @@ static int pe50_stop(struct pe50_algo_info *info, struct pe50_stop_info *sinfo)
 	atomic_set(&data->stop_algo, 0);
 	alarm_cancel(&data->timer);
 
-	ret = pe50_enable_dvchg_charging(info, PE50_DVCHG_SLAVE, false);
-	if (ret < 0) {
-		PE50_ERR("disable slave dvchg fail(%d)\n", ret);
-		return ret;
+	/* pri X91V-22 modify by suwenwei 20250225 start */
+	if (data->is_dvchg_exist[PE50_DVCHG_SLAVE]) {
+		ret = pe50_enable_dvchg_charging(info, PE50_DVCHG_SLAVE, false);
+		if (ret < 0) {
+			PE50_ERR("disable slave dvchg fail(%d)\n", ret);
+			return ret;
+		}
 	}
+	/* pri X91V-22 modify by suwenwei 20250225 end */
+
 	ret = pe50_set_dvchg_charging(info, false);
 	if (ret < 0) {
 		PE50_ERR("disable dvchg fail\n");
@@ -1232,7 +1319,7 @@ static inline int pe50_start(struct pe50_algo_info *info)
 	/* disable charger */
 	ret = pe50_hal_enable_charging(info->alg, CHG1, false);
 	if (ret < 0) {
-		PE50_ERR("disable swchg fail(%d)\n", ret);
+		PE50_ERR("disable charger fail\n");
 		return ret;
 	}
 
@@ -1278,11 +1365,11 @@ static int pe50_calculate_rcable_by_swchg(struct pe50_algo_info *info)
 
 	ret = pe50_hal_enable_charging(info->alg, CHG1, true);
 	if (ret < 0) {
-		PE50_ERR("en swchg fail(%d)\n", ret);
+		PE50_ERR("enable charging fail %d\n", ret);
 		return ret;
 	}
-
-	ret = pe50_set_ta_cap_cv(info, 8000, 1000);
+	/* pri X100S2-27 add by allen 202400926 */
+	ret = pe50_set_ta_cap_cv(info, 8000, 1500);
 	if (ret < 0) {
 		PE50_ERR("set ta cap fail(%d)\n", ret);
 		return ret;
@@ -1415,8 +1502,10 @@ static int pe50_algo_init_with_ta_cc(struct pe50_algo_info *info)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
 	u32 rcable_retry_level = (data->is_dvchg_exist[PE50_DVCHG_SLAVE] &&
-				  !data->tried_dual_dvchg) ?
+				  !data->tried_dual_dvchg &&
+				  !auth_data->cp_nums_lmt) ?
 				  desc->rcable_level_dual[PE50_RCABLE_NORMAL] :
 				  desc->rcable_level[PE50_RCABLE_NORMAL];
 	struct pe50_stop_info sinfo = {
@@ -1564,8 +1653,10 @@ static int pe50_algo_init_with_ta_cv(struct pe50_algo_info *info)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
 	u32 rcable_retry_level = (data->is_dvchg_exist[PE50_DVCHG_SLAVE] &&
-				  !data->tried_dual_dvchg) ?
+				  !data->tried_dual_dvchg &&
+				  !auth_data->cp_nums_lmt) ?
 				  desc->rcable_level_dual[PE50_RCABLE_NORMAL] :
 				  desc->rcable_level[PE50_RCABLE_NORMAL];
 	struct pe50_stop_info sinfo = {
@@ -1579,8 +1670,17 @@ static int pe50_algo_init_with_ta_cv(struct pe50_algo_info *info)
 	ret = pe50_enable_ta_charging(info, true, PE50_VTA_INIT, PE50_ITA_INIT);
 	if (ret < 0) {
 		PE50_ERR("enable ta charging fail(%d)\n", ret);
+		/* pri LAX10-608 modify by lvyuanchuan 20240517 begin*/
+		/*
 		sinfo.hardreset_ta = true;
 		goto err;
+		*/
+		ret = pe50_enable_ta_charging(info, true, PE50_VTA_RETRY, PE50_ITA_RETRY);
+		if (ret < 0) {
+			sinfo.hardreset_ta = true;
+			goto err;
+		}
+		/* pri LAX10-608 modify by lvyuanchuan 20240517 end*/
 	}
 
 	ret = pe50_hal_enable_hz(info->alg, CHG1, false);
@@ -1717,6 +1817,8 @@ err:
 		data->err_retry_cnt++;
 		return 0;
 	}
+	/*pri LAX10-882 add by lvyuanchuan 202400628 */
+	data->waiver = true;
 	return pe50_stop(info, &sinfo);
 }
 
@@ -1829,6 +1931,8 @@ static int pe50_algo_cal_r_info_with_ta_cap(struct pe50_algo_info *info,
 		if (r_info.ita == 0) {
 			PE50_ERR("ita == 0 fail\n");
 			sinfo->hardreset_ta = true;
+			/*pri LAX10-882 add by lvyuanchuan 202400628*/
+			data->waiver = true;
 			return -EINVAL;
 		}
 
@@ -1925,8 +2029,11 @@ static int pe50_algo_measure_r_with_ta_cc(struct pe50_algo_info *info)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	u32 ita, idvchg_lmt;
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
+	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
 	u32 rcable_retry_level = (data->is_dvchg_exist[PE50_DVCHG_SLAVE] &&
-				  !data->tried_dual_dvchg) ?
+				  !data->tried_dual_dvchg &&
+				  !auth_data->cp_nums_lmt) ?
 				  desc->rcable_level_dual[PE50_RCABLE_NORMAL] :
 				  desc->rcable_level[PE50_RCABLE_NORMAL];
 	struct pe50_stop_info sinfo = {
@@ -1951,7 +2058,9 @@ static int pe50_algo_measure_r_with_ta_cc(struct pe50_algo_info *info)
 		 data->r_sw, data->r_bat, data->r_cable, data->r_total);
 
 	/* If haven't tried dual dvchg, try it once */
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
 	if (data->is_dvchg_exist[PE50_DVCHG_SLAVE] && !data->tried_dual_dvchg &&
+			!auth_data->cp_nums_lmt &&
 	    data->idvchg_cc <= pe50_get_ita_lmt(info)) {
 		PE50_INFO("try dual dvchg\n");
 		data->tried_dual_dvchg = true;
@@ -2032,8 +2141,10 @@ static int pe50_algo_measure_r_with_ta_cv(struct pe50_algo_info *info)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
 	u32 rcable_retry_level = (data->is_dvchg_exist[PE50_DVCHG_SLAVE] &&
-				  !data->tried_dual_dvchg) ?
+				  !data->tried_dual_dvchg &&
+				  !auth_data->cp_nums_lmt) ?
 				  desc->rcable_level_dual[PE50_RCABLE_NORMAL] :
 				  desc->rcable_level[PE50_RCABLE_NORMAL];
 	struct pe50_stop_info sinfo = {
@@ -2065,7 +2176,11 @@ static int pe50_algo_measure_r_with_ta_cv(struct pe50_algo_info *info)
 	PE50_ERR("avg_r(sw,bat,cable):(%d,%d,%d), r_total:%d\n",
 		 data->r_sw, data->r_bat, data->r_cable, data->r_total);
 select_ita:
-	ret = pe50_select_ita_lmt_by_r(info, false);
+	/*pri LAX10-161 modify by lvyuanchuan 202400407*/
+	/*
+		ret = pe50_select_ita_lmt_by_r(info, false);
+	*/
+	ret = pe50_select_ita_lmt_by_r(info, !auth_data->cp_nums_lmt);
 	if (ret < 0) {
 		PE50_ERR("select dvchg ita lmt fail(%d)\n", ret);
 		goto out;
@@ -2299,8 +2414,10 @@ static int pe50_algo_ss_dvchg_with_ta_cv(struct pe50_algo_info *info)
 	}
 
 	/* Turn on slave dvchg if ita_measure >= idvchg_ss_init */
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
 	if (data->is_dvchg_exist[PE50_DVCHG_SLAVE] && !data->tried_dual_dvchg &&
 	    data->ita_measure >= desc->idvchg_ss_init &&
+			!auth_data->cp_nums_lmt &&
 	    data->idvchg_cc <= pe50_get_ita_lmt(info)) {
 		PE50_INFO("try dual dvchg\n");
 		data->tried_dual_dvchg = true;
@@ -2623,10 +2740,13 @@ static int pe50_algo_cc_cv_with_ta_cv(struct pe50_algo_info *info)
 				data->ita_gap_per_vstep :
 				auth_data->ita_gap_per_vstep;
 	u32 vta_measure, ita_measure, suspect_ta_cc = false;
+	/* pri X100S2-212 modify by suwenwei 20240914 */
+	u32 ibusocp, ita_lmt = 0;
 	struct pe50_stop_info sinfo = {
 		.reset_ta = true,
 		.hardreset_ta = false,
 	};
+	bool en = false;
 
 	PE50_DBG("++\n");
 
@@ -2637,6 +2757,8 @@ static int pe50_algo_cc_cv_with_ta_cv(struct pe50_algo_info *info)
 		sinfo.hardreset_ta = auth_data->support_meas_cap;
 		goto out;
 	}
+	/* pri LAX10-445 add by lvyuanchuan 20240508 begin*/
+	/*
 	if (data->ita_measure < data->idvchg_term &&
 	    data->is_dvchg_en[PE50_DVCHG_SLAVE]) {
 		ret = pe50_check_slave_dvchg_off(info);
@@ -2655,7 +2777,7 @@ static int pe50_algo_cc_cv_with_ta_cv(struct pe50_algo_info *info)
 	}
 
 	idvchg_lmt = pe50_get_idvchg_lmt(info);
-
+	*/
 	ret = pe50_get_adc(info, PE50_ADCCHAN_VBAT, &vbat);
 	if (ret < 0) {
 		PE50_ERR("get vbat fail(%d)\n", ret);
@@ -2667,8 +2789,46 @@ static int pe50_algo_cc_cv_with_ta_cv(struct pe50_algo_info *info)
 		PE50_ERR("get vsys fail(%d)\n", ret);
 		goto out;
 	}
+	PE50_DBG("(vsys,vbat,cv,idvchg_term)(%d,%d,%d,%d)\n",
+		vsys, vbat, data->vbat_cv, data->idvchg_term);
+	/*check master*/
+	pe50_hal_is_enabled(info->alg, DVCHG1, &en);
+	if (!en) {
+		/* pri X91V-176 modify by suwenwei 20250414 */
+		//data->is_dvchg_ieoc = true;
+		PE50_INFO("master off!\n");
+		goto out;
+	}
+	/*check slave*/
+	if (vbat >= (data->vbat_cv - PE50_SLAVE_OFF_GAP)) {
+		if (data->is_dvchg_en[PE50_DVCHG_SLAVE]) {
+			/* pri X100S2-212 modify by suwenwei 20240914 start */
+			/* IBUSOCP */
+			ita_lmt = pe50_get_ita_lmt(info);
+			ibusocp = pe50_get_dvchg_ibusocp(info, ita_lmt);
+			ret = pe50_hal_set_ibusocp(info->alg, DVCHG1, ibusocp * 2);
+			if (ret < 0) {
+				PE50_ERR("set ibusocp fail(%d)\n", ret);
+				return ret;
+			}
+			/* pri X100S2-212 modify by suwenwei 20240914 end */
+			ret = pe50_check_slave_dvchg_off(info);
+			if (ret < 0) {
+				PE50_INFO("slave off fail(%d)\n", ret);
+				goto out;
+			}
+		}
+		PE50_INFO("slave off!\n");
+	}
+	if (data->ita_measure <= data->idvchg_term && vbat >= (data->vbat_cv - PE50_CV_DOWN_GAP)) {
+		PE50_INFO("finish PE5.0 charging\n");
+		data->is_dvchg_ieoc = true;
+		goto out;
+	}
 
-	if (vbat >= data->vbat_cv) {
+	idvchg_lmt = pe50_get_idvchg_lmt(info);
+	/* pri LAX10-445 add by lvyuanchuan 20240508 end*/
+	if (vbat >= data->vbat_cv + PE50_CV_UPPER_GAP) {
 		PE50_INFO("--vbat >= vbat_cv, %d > %d\n", vbat, data->vbat_cv);
 		vta -= auth_data->vta_step;
 		ita -= ita_gap_per_vstep;
@@ -2741,7 +2901,8 @@ static bool pe50_check_charging_time(struct pe50_algo_info *info,
 	if (dtime.tv_sec >= desc->chg_time_max) {
 		PE50_ERR("PE5.0 algo timeout(%d, %d)\n", (int)dtime.tv_sec,
 			 desc->chg_time_max);
-		return false;
+		/*pri LAX10-959 add by lvyuanchuan 202400613*/
+		//return false;
 	}
 	return true;
 }
@@ -2768,16 +2929,24 @@ static bool pe50_check_eoc(struct pe50_algo_info *info,
 	ret = pe50_get_adc(info, PE50_ADCCHAN_IBAT, &ibat);
 	if (ret < 0)
 		PE50_ERR("get ibat fail(%d)\n", ret);
-
+	/*pri LAX10-957 add by lvyuanchuan 202400614 begin*/
+	if (soc >= desc->start_soc_max) {
+		PE50_INFO("[soc]finish PE5.0 charging\n");
+		data->is_dvchg_ieoc = true;
+		return false;
+	}
 	if (soc >= desc->stop_soc_max &&
 	    vbat > (data->vbat_cv - desc->vbat_max_gap) &&
-	    ibat < (data->idvchg_term * 2)) {
+	    ibat <= (data->idvchg_term * 2)) {
 		if (algo_running)
 			data->start_soc_max = desc->start_soc_max -
 					      PE50_START_SOC_MAX_GAP;
+
+		PE50_INFO("[eoc]finish PE5.0 charging\n");
+		data->is_dvchg_ieoc = true;
 		return false;
 	}
-
+	/*pri LAX10-957 add by lvyuanchuan 202400614 end*/
 	ita_lmt = pe50_get_ita_lmt(info);
 	/* Consider AICR is decreased */
 	ita_lmt = min(ita_lmt, data->is_swchg_en ?
@@ -2852,6 +3021,8 @@ static bool pe50_check_dvchg_ibusocp(struct pe50_algo_info *info,
 		if (ibus > ibusocp) {
 			PE50_ERR("(%s)ibus(%dmA) > ibusocp(%dmA)\n",
 				 pe50_dvchg_role_name[i], ibus, ibusocp);
+			/*pri LAX10-882 add by lvyuanchuan 202400628*/
+			data->waiver = true;
 			return false;
 		}
 	}
@@ -2956,7 +3127,8 @@ static bool pe50_check_ibatocp(struct pe50_algo_info *info,
 		return false;
 	}
 	PE50_INFO("ibat(%dmA), ibatocp(%dmA)\n", ibat, ibatocp);
-	if (ibat > ibatocp) {
+	/*pri LAX10-161 modify by lvyuanchuan 202400407*/
+	if (ibat > 0 && ibat > ibatocp) {
 		PE50_ERR("ibat(%dmA) > ibatocp(%dmA)\n", ibat, ibatocp);
 		return false;
 	}
@@ -3070,16 +3242,23 @@ static bool pe50_check_tbat_level(struct pe50_algo_info *info,
 				  struct pe50_stop_info *sinfo)
 {
 	int ret, tbat;
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+	/*
+	 *15(very_cold) 15(cold) 15(very_cool) 15(cool) 15(normal) 35(warm) 45(very_warm) 45(hot) 45(very_hot)
+	 *-1 : invalid temperature point
+	 * 1 : effective temperature point
+	*/
+	int tbat_curlmt[PE50_THERMAL_MAX]={-1, -1, -1, -1, 1, 1, 1, -1, -1};
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_thermal_data tdata = {
 		.name = "tbat",
 		.temp_level_def = desc->tbat_level_def,
-		.curlmt = desc->tbat_curlmt,
+		.curlmt = tbat_curlmt,
 		.temp_level = &data->tbat_level,
 		.recovery_area = desc->tbat_recovery_area,
 	};
-
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 	ret = pe50_get_adc(info, PE50_ADCCHAN_TBAT, &tbat);
 	if (ret < 0) {
 		PE50_ERR("get tbat fail(%d)\n", ret);
@@ -3097,6 +3276,8 @@ static bool pe50_check_tbat_level(struct pe50_algo_info *info,
 static bool pe50_check_tta_level(struct pe50_algo_info *info,
 				 struct pe50_stop_info *sinfo)
 {
+/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+/*
 	int ret;
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
@@ -3122,6 +3303,9 @@ static bool pe50_check_tta_level(struct pe50_algo_info *info,
 
 	tdata.temp = status.temperature;
 	return pe50_check_thermal_level(info, &tdata);
+*/
+	return true;
+/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 }
 
 /*
@@ -3222,8 +3406,10 @@ static bool pe50_algo_safety_check(struct pe50_algo_info *info)
 	for (i = 0; i < ARRAY_SIZE(fn_descs); i++) {
 		if (!algo_running && fn_descs[i].check_during_running)
 			continue;
-		if (!fn_descs[i].fn(info, &sinfo))
+		if (!fn_descs[i].fn(info, &sinfo)) {
+			PE50_ERR(" fn[%d] error!\n", i);
 			goto err;
+		}
 	}
 	return true;
 err:
@@ -3297,6 +3483,9 @@ static inline int __pe50_plugout_reset(struct pe50_algo_info *info,
 
 	PE50_DBG("++\n");
 	data->ta_ready = false;
+	/* pri LAX10-339 add by lvyuanchuan 20240325 */
+	data->is_dvchg_ieoc = false;
+	/*pri LAX10-882 add by lvyuanchuan 202400628*/
 	memset(auth_data, 0, sizeof(*auth_data));
 	pe50_algo_data_partial_reset(info);
 	return pe50_stop(info, sinfo);
@@ -3306,7 +3495,7 @@ static int pe50_notify_hardreset_hdlr(struct pe50_algo_info *info)
 {
 	struct pe50_stop_info sinfo = {
 		.reset_ta = false,
-		.hardreset_ta = false,
+		.hardreset_ta = true,
 	};
 
 	PE50_INFO("++\n");
@@ -3550,7 +3739,12 @@ static int pe50_dump_charging_info(struct pe50_algo_info *info)
 		 vbus, ibus[PE50_DVCHG_MASTER], ibus[PE50_DVCHG_SLAVE], ibus_total, vbat, ibat,
 		 tbat, vsys, soc,
 		 vout[PE50_DVCHG_MASTER], vout[PE50_DVCHG_SLAVE]);
-
+	for (i = PE50_DVCHG_MASTER; i < PE50_DVCHG_MAX; i++) {
+		ret = pe50_hal_dump_registers(info->alg, to_chgidx(i));
+		if (ret < 0) {
+			PE50_ERR("dump  %s registers fail\n", pe50_dvchg_role_name[i]);
+		}
+	}
 	return 0;
 }
 
@@ -3682,7 +3876,38 @@ out_unlock:
 
 	return running;
 }
+/* pri LAX10-445 LAX10-882 add by lvyuanchuan 202400628 begin*/
+static bool pe50_is_algo_finish(struct chg_alg_device *alg)
+{
+	struct pe50_algo_info *info = chg_alg_dev_get_drvdata(alg);
+	struct pe50_algo_data *data = info->data;
+	bool finish = false;
 
+	mutex_lock(&data->lock);
+	if (data->is_dvchg_ieoc) {
+		finish = true;
+	}
+	mutex_unlock(&data->lock);
+	PE50_INFO("ALGO FINISH  = %d\n", finish);
+	return finish;
+}
+
+static bool pe50_is_algo_waiver(struct chg_alg_device *alg)
+{
+	struct pe50_algo_info *info = chg_alg_dev_get_drvdata(alg);
+	struct pe50_algo_data *data = info->data;
+	bool waiver = false;
+
+	mutex_lock(&data->lock);
+	if (data->waiver) {
+		waiver = true;
+	}
+	mutex_unlock(&data->lock);
+	PE50_INFO("waiver = %d\n", waiver);
+	return waiver;
+}
+
+/* pri LAX10-445 LAX10-882 add by lvyuanchuan 202400628 end*/
 static int pe50_is_algo_ready(struct chg_alg_device *alg)
 {
 	int ret = 0;
@@ -3691,13 +3916,16 @@ static int pe50_is_algo_ready(struct chg_alg_device *alg)
 	struct pe50_algo_data *data = info->data;
 	struct pe50_algo_desc *desc = info->desc;
 	struct pe50_ta_auth_data *auth_data = &data->ta_auth_data;
-
-	if (algo_waiver_test)
+	/*pri LAX10-882 add by lvyuanchuan 202400628*/
+	if (algo_waiver_test || pe50_is_algo_waiver(alg))
 		return ALG_WAIVER;
 
 	if (pe50_is_algo_running(info->alg))
 		return ALG_RUNNING;
-
+	/* pri LAX10-445 add by lvyuanchuan 20240508 begin*/
+	if(pe50_is_algo_finish(info->alg))
+		return ALG_DONE;
+	/* pri LAX10-445 add by lvyuanchuan 20240508 end*/
 	mutex_lock(&data->lock);
 	PE50_DBG("++\n");
 	if (!data->inited) {
@@ -3735,13 +3963,15 @@ static int pe50_is_algo_ready(struct chg_alg_device *alg)
 		}
 	}
 
-	if (!pe50_algo_safety_check(info)) {
-		ret = ALG_NOT_READY;
-		goto out;
-	}
-
+	/* pri X100S2-233 add by suwenwei 20240919 start */
 	if (!pe50_is_ta_rdy(info)) {
 		ret = pe50_hal_is_adapter_ready(alg);
+		goto out;
+	}
+	/* pri X100S2-233 add by suwenwei 20240919 end */
+
+	if (!pe50_algo_safety_check(info)) {
+		ret = ALG_NOT_READY;
 		goto out;
 	}
 	ret = ALG_READY;
@@ -3948,11 +4178,14 @@ static inline void pe50_parse_dt_u32(struct device_node *np, void *desc,
 				     int prop_cnt)
 {
 	int i;
+	int ret = 0;
 
 	for (i = 0; i < prop_cnt; i++) {
 		if (unlikely(!props[i].name))
 			continue;
-		of_property_read_u32(np, props[i].name, desc + props[i].offset);
+		ret = of_property_read_u32(np, props[i].name, desc + props[i].offset);
+		if (ret < 0)
+			return;
 	}
 }
 
@@ -3961,12 +4194,15 @@ static inline void pe50_parse_dt_u32_arr(struct device_node *np, void *desc,
 					 int prop_cnt)
 {
 	int i;
+	int ret = 0;
 
 	for (i = 0; i < prop_cnt; i++) {
 		if (unlikely(!props[i].name))
 			continue;
-		of_property_read_u32_array(np, props[i].name,
+		ret = of_property_read_u32_array(np, props[i].name,
 					   desc + props[i].offset, props[i].sz);
+		if (ret < 0)
+			return;
 	}
 }
 
@@ -4045,7 +4281,94 @@ static const struct pe50_dtprop pe50_dtprops_s32_array[] = {
 	PE50_DT_VALPROP_ARR("tswchg-level-def", tswchg_level_def, PE50_THERMAL_MAX),
 	PE50_DT_VALPROP_ARR("tswchg-curlmt", tswchg_curlmt, PE50_THERMAL_MAX),
 };
+/* pri LAX10-339 add by lvyuanchuan 20240325 begin*/
+static void parse_custom_jeita_table(const struct device_node *np,
+		const char *node_srting, int *profile_nums,
+		struct profile_t *profile, int saddles, int column)
+{
+	u32 nums = 0;
+	u32 idx = 0;
+	u32 voltage = 0;
+	u32 ibatmax = 0;
+	struct profile_t *profile_p;
+	int s_len = strnlen(node_srting, MAX_PROPS_NAME_LEN);
+	char temp[MAX_PROPS_NAME_LEN+1] = {0};
 
+	idx = 0;
+	strncpy(temp, node_srting, s_len + 1);
+	profile_p = profile;
+
+	while (!of_property_read_u32_index(np, temp, idx, &voltage)) {
+		idx++;
+		of_property_read_u32_index(np, temp, idx, &ibatmax);
+		idx++;
+
+		PE50_INFO("voltage: %d mv, ibatmax: %d ma\n", voltage, ibatmax);
+
+		profile_p->voltage = voltage;
+		profile_p->ibatmax = ibatmax;
+		if(voltage)
+			nums++;
+
+		profile_p++;
+
+		if (idx >= (saddles * column))
+			break;
+	}
+
+	if (idx == 0) {
+		PE50_ERR("cannot find %s in dts\n", node_srting);
+	}
+	PE50_INFO(" profile_nums: %d\n", nums);
+	*profile_nums = nums;
+	return;
+}
+
+void pe50_init_jeita_from_dts(struct pe50_algo_info *info)
+{
+	int i;
+	int bat_id;
+	int ret;
+	int active_tab_num = 0;
+	int profile_nums = 0;
+	struct pe50_algo_desc *desc;
+	struct device_node *np ;
+	char node_name[MAX_PROPS_NAME_LEN+1];
+
+	if(IS_ERR_OR_NULL(info))
+		return;
+	desc = info->desc;
+	if(info->dev)
+		np = info->dev->of_node;
+
+	if(IS_ERR_OR_NULL(desc) || IS_ERR_OR_NULL(np))
+		return;
+
+	ret = of_property_read_u32_array(np, "tbat-grade-def",
+  			(u32 *)desc->jeita.temperature_table, MAX_TEMP_TABLE);
+	if (ret < 0)
+  			PE50_ERR("get tbat-grade-def fail\n");
+	for (i = 0; i < MAX_TEMP_TABLE; i++) {
+		PE50_INFO("temperature_table[%d]: %d\n", i, desc->jeita.temperature_table[i]);
+		if (desc->jeita.temperature_table[i] > 0)
+			active_tab_num++;
+	}
+	PE50_INFO("active_tab_num %d\n", active_tab_num);
+	if (active_tab_num)
+		desc->jeita.active_table_number = active_tab_num - 1;
+	/*Default supply bat0*/
+	bat_id = desc->jeita.bat_id = 0;
+	/*Default 5 rows and 2 columns*/
+	for (i = 0; i < desc->jeita.active_table_number; i++) {
+		ret = sprintf(node_name, "bat%d-profile-t%d", bat_id, i);
+		if (ret >= 0) {
+			parse_custom_jeita_table(np, node_name, &profile_nums,
+				desc->jeita.jeita_table[i].profile, MAX_PROFILE_TABLE, 2);
+			desc->jeita.jeita_table[i].pro_nums = profile_nums;
+		}
+	}
+}
+/* pri LAX10-339 add by lvyuanchuan 20240325 end*/
 static int pe50_parse_dt(struct pe50_algo_info *info)
 {
 	int i, ret;
@@ -4088,7 +4411,7 @@ static int pe50_parse_dt(struct pe50_algo_info *info)
 	}
 
 	desc->allow_not_check_ta_status =
-		of_property_read_bool(np, "allow_not_check_ta_status");
+		of_property_read_bool(np, "allow-not-check-ta-status");
 	pe50_parse_dt_u32(np, (void *)desc, pe50_dtprops_u32,
 			  ARRAY_SIZE(pe50_dtprops_u32));
 	pe50_parse_dt_u32_arr(np, (void *)desc, pe50_dtprops_u32_array,
@@ -4100,6 +4423,7 @@ static int pe50_parse_dt(struct pe50_algo_info *info)
 		desc->swchg_ichg = 0;
 	}
 
+	PE50_INFO("support desc->ircmp_vclamp(%d)\n", desc->ircmp_vclamp);
 	if (of_property_read_u32(np, "vbat_threshold", &val) >= 0)
 		data->vbat_threshold = val;
 	else if (of_property_read_u32(np, "vbat-threshold", &val) >= 0)
@@ -4109,7 +4433,8 @@ static int pe50_parse_dt(struct pe50_algo_info *info)
 			DISABLE_VBAT_THRESHOLD);
 		data->vbat_threshold = DISABLE_VBAT_THRESHOLD;
 	}
-
+	/* pri LAX10-339 add by lvyuanchuan 20240325 */
+	pe50_init_jeita_from_dts(info);
 	return 0;
 }
 

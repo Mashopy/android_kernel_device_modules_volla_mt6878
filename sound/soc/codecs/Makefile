@@ -39,3 +39,10 @@ obj-$(CONFIG_SND_SOC_MT6681_ACCDET) += mt6681-accdet.o
 obj-$(CONFIG_DEVICE_MODULES_SND_SOC_HDMI_CODEC)	+= snd-soc-hdmi-codec.o
 obj-$(CONFIG_SND_SOC_RT5512)	+= richtek/
 obj-$(CONFIG_SND_SOC_TFA9874)	+= tfa98xx/
+#drv added by pengzhipeng, fs1599, 20221103-start
+obj-$(CONFIG_SND_SOC_AW882XX_V_2_0_0)	+= aw882xx_v_2_0_0/
+#drv added by pengzhipeng, fs1599, 20221103-end
+#begin sce drv zhangmeng add bring up audio on 20250421
+obj-$(CONFIG_SND_SOC_AW87XXX) 	+= aw87xxx/
+obj-$(CONFIG_MTK_HAC_SUPPORT)	+= hac_gpio.o
+#end sce drv zhangmeng add bring up audio on 20250421

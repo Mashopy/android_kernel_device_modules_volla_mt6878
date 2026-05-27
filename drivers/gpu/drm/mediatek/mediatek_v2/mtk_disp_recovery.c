@@ -39,6 +39,7 @@
 #define esd_timer_to_mtk_crtc(x) container_of(x, struct mtk_drm_crtc, esd_timer)
 
 static DEFINE_MUTEX(pinctrl_lock);
+extern bool oled_esd_recovery;//add by huangxinglve, 20250826, add for esd brightnees
 
 /* pinctrl implementation */
 long _set_state(struct drm_crtc *crtc, const char *name)
@@ -594,6 +595,7 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 
 			DDPPR_ERR("[ESD%u]esd check fail, will do esd recovery. try=%d\n",
 				crtc_idx, i);
+			oled_esd_recovery = 1;//add by huangxinglve, 20250826, add for esd brightnees
 			mtk_drm_esd_recover(crtc);
 			recovery_flg = 1;
 			mtk_drm_trace_end();
@@ -603,6 +605,7 @@ int mtk_drm_esd_testing_process(struct mtk_drm_esd_ctx *esd_ctx, bool need_lock)
 			DDPPR_ERR(
 				"[ESD%u]after esd recovery %d times, still fail, disable esd check\n",
 				crtc_idx, ESD_TRY_CNT);
+			oled_esd_recovery = 1;//add by huangxinglve, 20250826, add for esd brightnees
 			mtk_disp_esd_check_switch(crtc, false);
 
 			if (need_lock) {

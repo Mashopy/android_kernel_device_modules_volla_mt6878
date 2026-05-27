@@ -1278,11 +1278,33 @@ int tcpc_typec_handle_cc_change(struct tcpc_device *tcpc)
 {
 	int ret = 0;
 
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+    struct charger_device *wlchg1_dev;
+	union charger_propval wls_work_mode = {0};
+#endif /* CONFIG_WIRELESS_MT5706 */
+
 	ret = tcpci_get_cc(tcpc);
 	if (ret < 0)
 		return ret;
 
 	TYPEC_INFO("[CC_Alert] %d/%d\n", typec_get_cc1(), typec_get_cc2());
+#if IS_ENABLED(CONFIG_WIRELESS_MT5706)
+    wlchg1_dev = get_charger_by_name("wireless_chg");
+    if (!wlchg1_dev) {
+        pr_info("%s: get wls charger device failed\n", __func__);
+        return -ENODEV;
+    }
+
+	ret = charger_dev_get_property(wlchg1_dev, CHARGER_PROP_WLS_MODE, &wls_work_mode);
+	pr_err("extcon-usb wls_work_mode:%d \n", wls_work_mode.intval);
+    if (!ret && wls_work_mode.intval == WLS_WORK_MODE_RX) {
+		wls_work_mode.intval = 0;
+		ret = charger_dev_set_property(wlchg1_dev, CHARGER_PROP_WLS_RX_ENABLE, &wls_work_mode);
+		if (ret)
+				pr_err("wls rx disable failed \n");
+		msleep(15);
+	}
+#endif /* CONFIG_WIRELESS_MT5706 */
 
 #if CONFIG_TYPEC_CAP_NORP_SRC
 	if (typec_try_norp_src(tcpc))

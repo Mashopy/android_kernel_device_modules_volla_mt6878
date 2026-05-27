@@ -74,6 +74,10 @@ enum mtk_spk_i2s_type {
 	MTK_SPK_I2S_OUT1,
 	MTK_SPK_I2S_IN4,
 	MTK_SPK_I2S_OUT4,
+	//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+	MTK_SPK_I2S_IN2,
+	MTK_SPK_I2S_OUT2,
+	//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
 	MTK_SPK_I2S_TYPE_NUM
 };
 

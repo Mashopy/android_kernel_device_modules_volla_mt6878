@@ -349,9 +349,20 @@ static void led_debug_log(struct mt_led_data *s_led,
 
 static int brightness_maptolevel(struct led_conf_info *led_conf, int brightness)
 {
+	//drv huangxinglve sync for hbm mode of The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-start
+	if (brightness == 256)
+		return 3765;
+	if (brightness == 257)
+		return 3895;
+	if (brightness == 258)
+		return 3997;
+	if (brightness == 259)
+		return 4094;
+	//drv huangxinglve sync for hbm mode The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-end
 	return (((led_conf->max_hw_brightness) * brightness
-				+ ((led_conf->cdev.max_brightness) / 2))
-				/ (led_conf->cdev.max_brightness));
+				+ ((255) / 2))
+				/ (255));
+
 }
 
 static int mtk_set_hw_brightness(struct mt_led_data *led_dat, int brightness,
@@ -359,7 +370,13 @@ static int mtk_set_hw_brightness(struct mt_led_data *led_dat, int brightness,
 {
 
 	int ret = 0;
-
+//drv huangxinglve sync for hbm mode The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-start
+	if((brightness != 4094) && (brightness != 3765) && (brightness != 3895) && (brightness != 3997) && (brightness != 4095)) {//  led_dat->conf.limit_hw_brightness -> 4095
+		brightness = min(brightness, led_dat->conf.limit_hw_brightness);
+		if (brightness == led_dat->hw_brightness)
+			return 0;
+	}
+//drv huangxinglve sync for hbm mode The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-end
 	if (brightness != 0) {
 		brightness = min(brightness, led_dat->conf.limit_hw_brightness);
 		brightness = max(brightness, led_dat->conf.min_hw_brightness);

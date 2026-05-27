@@ -3551,7 +3551,7 @@ static void mtk_battery_daemon_handler(struct mtk_battery *gm, void *nl_data,
 		old_uisoc = gm->ui_soc;
 
 		if (gm->disableGM30 == true)
-			gm->ui_soc = 50;
+			gm->ui_soc = old_uisoc;//add by wanwen,get ture battery capacity
 		else
 			gm->ui_soc = (daemon_ui_soc + 50) / 100;
 

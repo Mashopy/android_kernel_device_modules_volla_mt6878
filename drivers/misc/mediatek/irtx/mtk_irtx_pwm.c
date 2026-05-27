@@ -15,8 +15,19 @@
 #include <mt-plat/mtk_pwm.h>
 #include <mt-plat/mtk_pwm_hal.h>
 
+#include <linux/of_address.h>
+#include <linux/of_device.h>
+#include <linux/of_gpio.h>
+#include <linux/of_irq.h>
+#include <linux/gpio.h>
+
 #define DRIVER_NAME	"mtk-pwm-ir-tx"
 #define DEVICE_NAME	"MTK PWM IR Transmitter"
+//prize hjw start
+#define IRTX_GPIO_MODE_LED_DEFAULT 0
+#define IRTX_GPIO_MODE_LED_SET 1
+char *irtx_gpio_cfg[] = {  "irtx_gpio_led_default", "irtx_gpio_led_set"};
+//prize hjw end
 #define IRTX_PWM_CLOCK (26000000)
 //#define IRTX_DEBUG
 
@@ -28,7 +39,11 @@ struct mtk_pwm_ir {
 	unsigned int duty_cycle;
 	unsigned int cycle;
 	struct platform_device *pdev;
+	/* GPIO pin control */
+	struct pinctrl *ppinctrl_irtx; //prize
 };
+
+struct mtk_pwm_ir mt_irtx_dev; //prize
 
 static struct pwm_spec_config irtx_pwm_config = {
 	.pwm_no = 0,
@@ -45,7 +60,35 @@ static struct pwm_spec_config irtx_pwm_config = {
 	.PWM_MODE_MEMORY_REGS.GDURATION = 0,
 	.PWM_MODE_MEMORY_REGS.WAVE_NUM = 1,
 };
+//prize hjw start
+void switch_irtx_gpio(int mode)
+{
+	struct pinctrl *ppinctrl_irtx = mt_irtx_dev.ppinctrl_irtx;
+	struct pinctrl_state *pins_irtx = NULL;
+	if (mode >= (ARRAY_SIZE(irtx_gpio_cfg))) {
+		pr_info("%s() [PinC](%d) fail!! - invalid parameter!\n",
+			__func__, mode);
+		return;
+	}
 
+	if (IS_ERR(ppinctrl_irtx)) {
+		pr_info("%s() [PinC] ppinctrl_irtx:%p Error! err:%ld\n",
+		       __func__, ppinctrl_irtx, PTR_ERR(ppinctrl_irtx));
+		return;
+	}
+	pins_irtx = pinctrl_lookup_state(ppinctrl_irtx, irtx_gpio_cfg[mode]);
+	if (IS_ERR(pins_irtx)) {
+		pr_info("%s() [PinC] pinctrl_lockup(%p, %s) fail!\n",
+			__func__, ppinctrl_irtx, irtx_gpio_cfg[mode]);
+		pr_info("%s() [PinC] ppinctrl:%p, err:%ld\n",
+			__func__, pins_irtx, PTR_ERR(pins_irtx));
+		return;
+	}
+
+	pinctrl_select_state(ppinctrl_irtx, pins_irtx);
+	pr_info("%s() [PinC] to mode:%d done.\n", __func__, mode);
+}
+//prize hjw end
 static int mtk_pwm_ir_tx(struct rc_dev *rcdev, unsigned int *txbuf,
 			 unsigned int count)
 {
@@ -93,7 +136,7 @@ static int mtk_pwm_ir_tx(struct rc_dev *rcdev, unsigned int *txbuf,
 	buf_size = buf_size / BITS_PER_BYTE; /* byte size */
 
 	wave_vir = dma_alloc_coherent(&pwm_ir->pdev->dev, buf_size,
-		&wave_phy, GFP_KERNEL);
+		&wave_phy, GFP_DMA); //add by driver for mtk modify GFP_KERNEL
 	if (!wave_vir)
 		return -ENOMEM;
 
@@ -137,6 +180,7 @@ static int mtk_pwm_ir_tx(struct rc_dev *rcdev, unsigned int *txbuf,
 	irtx_pwm_config.PWM_MODE_MEMORY_REGS.BUF0_BASE_ADDR = wave_phy;
 	irtx_pwm_config.PWM_MODE_MEMORY_REGS.BUF0_SIZE = len;
 
+	switch_irtx_gpio(IRTX_GPIO_MODE_LED_SET);   //prize hjw
 #ifdef IRTX_DEBUG
 	dbglog = logbuf;
 	pr_info("h_l_period = %d\n", h_l_period);
@@ -177,6 +221,7 @@ static int mtk_pwm_ir_tx(struct rc_dev *rcdev, unsigned int *txbuf,
 
 	pr_info("[IRTX] done, clean up\n");
 	mt_pwm_disable(irtx_pwm_config.pwm_no, irtx_pwm_config.pmic_pad);
+	switch_irtx_gpio(IRTX_GPIO_MODE_LED_DEFAULT);   //prize hjw
 
 	if (pwm_ir->regulator != NULL) {
 		if (regulator_enabled && regulator_is_enabled(pwm_ir->regulator)) {
@@ -239,7 +284,15 @@ static int mtk_pwm_ir_probe(struct platform_device *pdev)
 		pr_info("Could not get pwm-supply property form dts");
 		return -ENODEV;
 	}
-
+//prize hjw start
+	mt_irtx_dev.ppinctrl_irtx = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR(mt_irtx_dev.ppinctrl_irtx)) {
+		pr_info("%s() [PinC]cannot find pinctrl! ptr_err:%ld.\n",
+			__func__, PTR_ERR(mt_irtx_dev.ppinctrl_irtx));
+		//ret = PTR_ERR(mt_irtx_dev.ppinctrl_irtx);
+		//goto exit;
+	}
+//prize hjw end
 	pwm_ir->regulator = devm_regulator_get(&pdev->dev, pwm_str);
 	if (IS_ERR(pwm_ir->regulator))
 		return PTR_ERR(pwm_ir->regulator);
@@ -249,6 +302,7 @@ static int mtk_pwm_ir_probe(struct platform_device *pdev)
 	rc = regulator_set_voltage(pwm_ir->regulator, 2800000, 2800000);
 	if (rc < 0)
 		return rc;
+	switch_irtx_gpio(IRTX_GPIO_MODE_LED_DEFAULT);   //prize hjw
 
 	rcdev = devm_rc_allocate_device(&pdev->dev, RC_DRIVER_IR_RAW_TX);
 	if (!rcdev)

@@ -61,3 +61,12 @@ config TYPEC_MUX_PI3DPX1205A
 	  SSRX1/SSTX1/SSRX2/SSTX2 pins.
 	  Say Y to enable TYPEC DP Mux
 	  If unsure, say N.
+
+# prize added by hanjiuping for hl5280 support start
+config TYPEC_AUDIO_FSA4480_SWITCH
+	tristate "FSA4480/HL5280 USB Type-C Analog Audio Switch support"
+	depends on MTK_USB_TYPEC_MUX
+	help
+	  FSA4480 or HL5280 USB Type-C Analog Audio Switch support
+	  If unsure, say N.
+# prize added by hanjiuping for hl5280 support end

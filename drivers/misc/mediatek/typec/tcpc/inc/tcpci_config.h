@@ -12,7 +12,7 @@
 
 #define CONFIG_TYPEC_CAP_DBGACC		1
 #define CONFIG_TYPEC_CAP_DBGACC_SNK	0
-#define CONFIG_TYPEC_CAP_NORP_SRC	1
+#define CONFIG_TYPEC_CAP_NORP_SRC	0 //add by wanwen,pd-vbus cannot trigger the charger ic, resolve pd protocol anomalies 20250716
 
 #define CONFIG_RECV_BAT_ABSENT_NOTIFY	0
 

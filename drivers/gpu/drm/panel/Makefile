@@ -72,6 +72,7 @@ ifneq ($(wildcard $(srctree)/$(src)/k6989v2_64_alpha),)
 obj-$(CONFIG_DRM_PANEL_NT37706A_BOE_FHDPLUS_VDO) += k6989v2_64_alpha/panel-nt37706a-boe-fhdplus-vdo.o
 endif
 
+obj-$(CONFIG_DRM_PANEL_VISIONOX_HC5622_DPHY_CMD_120HZ) += panel-visionox-hc5622-dphy-cmd-120hz.o
 mediatek-drm-gateic-y := mtk_drm_panel_i2c.o \
 		  mtk_drm_gateic_rt4801h.o \
 		  mtk_drm_gateic_rt4831a.o \

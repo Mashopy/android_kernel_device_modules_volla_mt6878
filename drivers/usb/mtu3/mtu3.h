@@ -462,6 +462,10 @@ struct mtu3 {
 	const char *typec_name;
 	const char *typec_port_name;
 	struct typec_port *typec_port;
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 start
+	struct work_struct usb_state_work;
+	bool usb_suspend_val;
+//add by wanwen,Increase the work queue to solve the dump problem. 20251105 end
 };
 
 /* struct ssusb_offload */

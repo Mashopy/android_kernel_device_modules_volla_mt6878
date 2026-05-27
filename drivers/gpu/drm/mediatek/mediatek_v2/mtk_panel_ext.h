@@ -540,6 +540,11 @@ struct mtk_panel_params {
 	unsigned int lcm_cmd_if;
 	unsigned int hbm_en_time;
 	unsigned int hbm_dis_time;
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	unsigned int vsync_time;
+	unsigned int hbm_deadline;
+	unsigned int target_time;
+	//drv fix hbm shining questions 20250623 sync with S50 end
 	unsigned int lcm_index;
 	unsigned int wait_sof_before_dec_vfp;
 	unsigned int doze_delay;

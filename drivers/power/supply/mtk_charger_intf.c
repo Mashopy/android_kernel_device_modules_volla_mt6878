@@ -307,6 +307,9 @@ int get_charger_type(struct mtk_charger *info)
 	union power_supply_propval prop = {0};
 	union power_supply_propval prop2 = {0};
 	union power_supply_propval prop3 = {0};
+	//drv add fangduozhu, wireless charger mt5706 bringup, 20250430 start
+	union charger_propval wls_online = {0};
+	//drv add fangduozhu, wireless charger mt5706 bringup, 20250430 end
 	static struct power_supply *bc12_psy;
 	int ret;
 
@@ -336,6 +339,14 @@ int get_charger_type(struct mtk_charger *info)
 			prop2.intval = POWER_SUPPLY_TYPE_UNKNOWN;
 	}
 
+	//drv add fangduozhu, wireless charger mt5706 bringup, 20250430 start
+	if (info->wlchg1_dev) {
+		charger_dev_get_property(info->wlchg1_dev, CHARGER_PROP_WLS_CHG_ONLINE, &wls_online);
+		if (wls_online.intval && prop2.intval == POWER_SUPPLY_TYPE_UNKNOWN) {
+			prop2.intval = POWER_SUPPLY_TYPE_WIRELESS;
+		}
+	}
+	//drv add fangduozhu, wireless charger mt5706 bringup, 20250430 end
 	chr_debug("%s online:%d type:%d usb_type:%d\n", __func__,
 		prop.intval,
 		prop2.intval,

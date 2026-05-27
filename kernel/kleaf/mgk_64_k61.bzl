@@ -879,6 +879,33 @@ mgk_64_k61_platform_device_user_modules = {
 
 
 def get_overlay_modules_list():
+    if "ansuz.config" in DEFCONFIG_OVERLAYS:
+        mgk_64_k61_device_modules.remove("drivers/input/touchscreen/GT9895/gt9895.ko")
+        mgk_64_k61_device_modules.remove("drivers/input/touchscreen/GT9896S/gt9896s.ko")
+        mgk_64_k61_device_modules.remove("drivers/input/touchscreen/NT36532/nt36532.ko")
+        mgk_64_k61_device_modules.remove("drivers/misc/mediatek/flashlight/v4l2/k6983v1_64_alpha/sy7806.ko")
+        mgk_64_k61_device_modules.remove("drivers/misc/mediatek/flashlight/v4l2/lm3643.ko")
+        mgk_64_k61_device_modules.remove("drivers/misc/mediatek/flashlight/v4l2/lm3644.ko")
+        mgk_64_k61_device_modules.remove("drivers/misc/mediatek/nfc/st54spi.ko")
+        mgk_64_k61_device_modules.remove("drivers/tee/teei/510/isee.ko")
+        mgk_64_k61_device_modules.remove("drivers/tee/teei/510/isee-ffa.ko")
+
+        mgk_64_k61_device_modules.append("drivers/gpu/drm/panel/panel-visionox-hc5622-dphy-cmd-120hz.ko")
+        mgk_64_k61_device_modules.append("drivers/input/touchscreen/focaltech_ft3681_spi/focaltech_ft3681_spi.ko")
+        mgk_64_k61_device_modules.append("drivers/input/fingerprint/goodix-gw9518/gf_tee.ko")
+        mgk_64_k61_device_modules.append("drivers/leds/aw_haptic_hv/aw_haptic.ko")
+        mgk_64_k61_device_modules.append("drivers/misc/mediatek/hardware_info/hardware_info.ko")
+        mgk_64_k61_device_modules.append("drivers/misc/mediatek/flashlight/v4l2/ocp81378.ko")
+        mgk_64_k61_device_modules.append("drivers/misc/mediatek/pri/pri_common_node/pri_common_node.ko")
+        mgk_64_k61_device_modules.append("drivers/misc/mediatek/pixel_manager/pixel_manager.ko")
+        mgk_64_k61_device_modules.append("drivers/misc/mediatek/typec/mux/fsa4480-i2c.ko")
+        mgk_64_k61_device_modules.append("drivers/power/supply/mt5706_wireless_charger.ko")
+        mgk_64_k61_device_modules.append("drivers/power/supply/sh366100_battery.ko")
+        mgk_64_k61_device_modules.append("drivers/power/supply/upm6722.ko")
+        mgk_64_k61_device_modules.append("drivers/regulator/wl28681-regulator.ko")
+        mgk_64_k61_device_modules.append("sound/soc/codecs/aw87xxx/snd-soc-aw87xxx.ko")
+        mgk_64_k61_device_modules.append("sound/soc/codecs/hac_gpio.ko")
+
     if "fpga.config" in DEFCONFIG_OVERLAYS:
         mgk_64_k61_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_cus:fpsgo_cus")
         mgk_64_k61_kleaf_modules.remove("//vendor/mediatek/kernel_modules/fpsgo_int:fpsgo_int")

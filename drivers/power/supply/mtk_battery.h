@@ -167,6 +167,9 @@ struct battery_data {
 	/* Add for Battery Service */
 	int bat_batt_vol;
 	int bat_batt_temp;
+//drv add fangduozhu, bringup fuel gauge, 20250206 start
+	struct power_supply *fuelgauge_psy;
+//drv add fangduozhu, bringup fuel gauge, 20250206 end
 };
 
 struct VersionControl {

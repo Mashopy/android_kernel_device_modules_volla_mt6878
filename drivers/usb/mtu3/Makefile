@@ -3,6 +3,7 @@
 ccflags-y := -I$(srctree)/drivers/usb/gadget/
 ccflags-y += -I$(srctree)/drivers/usb/gadget/function
 ccflags-y += -I$(srctree)/drivers/usb/typec/
+subdir-ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/typec/tcpc/inc
 
 ccflags-$(CONFIG_DEVICE_MODULES_USB_MTU3_DEBUG)	+= -DDEBUG
 ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/usb/mtu3/

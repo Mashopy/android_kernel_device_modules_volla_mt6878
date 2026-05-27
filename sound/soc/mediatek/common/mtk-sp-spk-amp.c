@@ -228,6 +228,12 @@ int mtk_spk_update_info(struct snd_soc_card *card,
 		return -ENODEV;
 	}
 
+	//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+	dev_err(&pdev->dev,
+		"%s(),mtk_spk_i2s_out = %d, mtk_spk_i2s_in = %d ,MTK_SPK_I2S_OUT2 = %d,MTK_SPK_I2S_IN2 = %d\n",
+		__func__, mtk_spk_i2s_out, mtk_spk_i2s_in,MTK_SPK_I2S_OUT2,MTK_SPK_I2S_IN2);
+	//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
+
 	/* find dai link of i2s in and i2s out */
 	for_each_card_prelinks(card, i, dai_link) {
 		if (i2s_out_dai_link_idx < 0 &&
@@ -255,8 +261,10 @@ int mtk_spk_update_info(struct snd_soc_card *card,
 			i2s_out_dai_link_idx = i;
 			dai_link->name = MTK_SPK_NAME;
 		} else if (i2s_out_dai_link_idx < 0 &&
-			   strcmp(dai_link->cpus->dai_name, "I2SOUT0") == 0 &&
-			   mtk_spk_i2s_out == MTK_SPK_I2S_OUT0) {
+			   //add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+			   strcmp(dai_link->cpus->dai_name, "I2SOUT2") == 0 &&
+			   mtk_spk_i2s_out == MTK_SPK_I2S_OUT2) {
+			   //add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
 			i2s_out_dai_link_idx = i;
 			dai_link->name = MTK_SPK_NAME;
 		} else if (i2s_out_dai_link_idx < 0 &&
@@ -269,7 +277,14 @@ int mtk_spk_update_info(struct snd_soc_card *card,
 			   mtk_spk_i2s_out == MTK_SPK_I2S_OUT4) {
 			i2s_out_dai_link_idx = i;
 			dai_link->name = MTK_SPK_NAME;
+		//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+		} else if (i2s_out_dai_link_idx < 0 &&
+			   strcmp(dai_link->cpus->dai_name, "I2SOUT0") == 0 &&
+			   mtk_spk_i2s_out == MTK_SPK_I2S_OUT0) {
+			i2s_out_dai_link_idx = i;
+			dai_link->name = MTK_SPK_NAME;
 		}
+		//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
 
 		if (i2s_in_dai_link_idx < 0 &&
 		    strcmp(dai_link->cpus->dai_name, "I2S0") == 0 &&
@@ -291,8 +306,10 @@ int mtk_spk_update_info(struct snd_soc_card *card,
 			i2s_in_dai_link_idx = i;
 			dai_link->name = MTK_SPK_REF_NAME;
 		} else if (i2s_in_dai_link_idx < 0 &&
-			   strcmp(dai_link->cpus->dai_name, "I2SIN0") == 0 &&
-			   mtk_spk_i2s_in == MTK_SPK_I2S_IN0) {
+			   //add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+			   strcmp(dai_link->cpus->dai_name, "I2SIN2") == 0 &&
+			   mtk_spk_i2s_in == MTK_SPK_I2S_IN2) {
+			   //add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
 			i2s_in_dai_link_idx = i;
 			dai_link->name = MTK_SPK_REF_NAME;
 		} else if (i2s_in_dai_link_idx < 0 &&
@@ -305,7 +322,14 @@ int mtk_spk_update_info(struct snd_soc_card *card,
 			   mtk_spk_i2s_in == MTK_SPK_I2S_IN4) {
 			i2s_in_dai_link_idx = i;
 			dai_link->name = MTK_SPK_REF_NAME;
+		//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522 start
+		} else if (i2s_in_dai_link_idx < 0 &&
+			   strcmp(dai_link->cpus->dai_name, "I2SIN0") == 0 &&
+			   mtk_spk_i2s_in == MTK_SPK_I2S_IN0) {
+			i2s_in_dai_link_idx = i;
+			dai_link->name = MTK_SPK_REF_NAME;
 		}
+		//add by drv,liaojie for smartpa i2s_in2 out2 config 20240522  end
 
 		if (i2s_out_dai_link_idx >= 0 && i2s_in_dai_link_idx >= 0)
 			break;

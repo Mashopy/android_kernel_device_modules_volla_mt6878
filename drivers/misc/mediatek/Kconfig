@@ -67,6 +67,9 @@ source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/mmdebug/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/widevine_drm/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/hw_sem/Kconfig"
 endmenu # MultiMedia, Display, Camera
+#drv add by zhaopengge 20240516--start
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/pri/Kconfig"
+#drv add by zhaopengge 20240516--end
 
 menu "Security"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/trusted_mem/Kconfig"
@@ -209,6 +212,12 @@ source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/sensor/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/gate_ic/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/usb/Kconfig"
 source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/mbraink/Kconfig"
+# pri added by huangxinglve 20250521 for als cali begin
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/pixel_manager/Kconfig"
+# pri added by huangxinglve 20250521 for als cali end
+# pri LAX10-192 added by litao 20240408 begin
+source "$(KCONFIG_EXT_PREFIX)drivers/misc/mediatek/hardware_info/Kconfig"
+# pri LAX10-192 added by litao 20240408 end
 endmenu # Other Peripheral
 
 menu "Performance"

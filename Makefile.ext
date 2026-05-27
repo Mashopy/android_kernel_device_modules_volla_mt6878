@@ -80,6 +80,10 @@ obj-y += ../$(DEVICE_MODULES_REL_DIR)/drivers/gpu/drm/mediatek/
 
 obj-y += ../$(DEVICE_MODULES_REL_DIR)/drivers/input/touchscreen/
 
+#pri LAX10-192 add by yinhanhan 20240402 begin
+obj-y += ../$(DEVICE_MODULES_REL_DIR)/drivers/input/fingerprint/
+#pri LAX10-192 add by yinhanhan 20240402 end
+
 obj-y += ../$(DEVICE_MODULES_REL_DIR)/drivers/gpu/drm/panel/
 
 obj-y += ../$(DEVICE_MODULES_REL_DIR)/drivers/gpu/mediatek/

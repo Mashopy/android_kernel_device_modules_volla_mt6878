@@ -1864,8 +1864,8 @@
 			"cam_subb-4",
 			"cam_ccu-0", "cam_ccu-1", "cam_ccu-2",
 			"disp0-0", "disp0-1";
-		isp-vcore-supply = <&mt6319_6_vbuck1>;
-		cam-vcore-supply = <&mt6319_6_vbuck1>;
+		isp-main-supply = <&mt6319_6_vbuck1>;
+		cam-main-supply = <&mt6319_6_vbuck1>;
 	};
 
 	vlpcfg_reg_clk: syscon@1c00c000 {
@@ -2826,19 +2826,20 @@
 		mediatek,mmdvfs-clk = <&mmdvfs_clk>;
 		debug-version = <2>;
 	};
-
+	/*drv,huangxinglve,mod,20250717, mod for VTS mtk_leds fail start*/
 	mtk_leds: mtk-leds {
-		compatible = "mediatek,i2c-leds";
+		compatible = "mediatek,disp-conn-leds";
 		backlight {
 			label = "lcd-backlight";
-			max-brightness = <2047>;
+			max-brightness = <259>;
 			min-brightness = <4>;
-			max-hw-brightness = <2047>;
-			led-mode = <6>;
+			max-hw-brightness = <4095>;
+			led-mode = <4>;
 			gate-enable = <1>;
 			pwm-config = <0 1 0 0 0>;
 		};
 	};
+	/*drv,huangxinglve,mod,20250717, mod for VTS mtk_leds fail end*/
 
 	mtk_leds1: mtk-leds1 {
 		backlight {
@@ -3573,20 +3574,40 @@
 		mediatek,ccu-rproc = <&ccu_rproc>;
 	};
 
+
+//drv mod fangduozhu, keys bringup, 20250428 start
+#include <dt-bindings/input/input.h>
 	gpio_keys: gpio-keys {
 		compatible = "gpio-keys";
 		status = "okay";
 		pinctrl-names = "default";
 		pinctrl-0 = <&key_gpio_default>;
-		volumedown {
-			label = "Volume_Down";
-			linux,code = <114>;
-			linux,input-type = <1>;
+		volumeup {
+			label = "Volume_Up";
+			linux,code = <KEY_VOLUMEUP>;
+			linux,input-type = <EV_KEY>;
 			gpios = <&pio 54 1>;
 			wakeup-source;
 			debounce-interval = <30>;
 		};
+		function {
+			label = "Function";
+			linux,code = <KEY_ASSISTANT>;
+			linux,input-type = <EV_KEY>;
+			gpios = <&pio 55 1>;
+			wakeup-source;
+			debounce-interval = <30>;
+		};
+		hall {
+			label = "Hall";
+			linux,code = <KEY_F2>;
+			linux,input-type = <EV_KEY>;
+			gpios = <&pio 108 1>;
+			wakeup-source;
+			debounce-interval = <30>;
+		};
 	};
+//drv mod fangduozhu, keys bringup, 20250428 end
 
 	soc {
 		compatible = "simple-bus";
@@ -5787,7 +5808,7 @@
 				<0>, /*MTK_DRM_OPT_VP_PQ*/
 				<0>, /*MTK_DRM_OPT_GAME_PQ*/
 				<0>, /*MTK_DRM_OPT_MMPATH*/
-				<0>, /*MTK_DRM_OPT_HBM*/
+				<1>, /*MTK_DRM_OPT_HBM*/
 				<0>, /*MTK_DRM_OPT_VDS_PATH_SWITCH*/
 				<0>, /*MTK_DRM_OPT_LAYER_REC*/
 				<1>, /*MTK_DRM_OPT_CLEAR_LAYER*/
@@ -6303,6 +6324,9 @@
 			<&pericfg_ao_clk CLK_PERAOP_SPI1_B>;
 			clock-names = "parent-clk", "sel-clk", "spi-clk";
 			clock-source-type = "univpll";
+			//add by drv,for tee config 20241127 start
+			  tee-only;
+			//add by drv,for tee config 20241127 end
 		};
 
 		spi2: spi2@11012000 {
@@ -9057,8 +9081,14 @@
 				nvmem-cell-names = "intr_cal", "term_cal";
 				nvmem-cell-masks = <0x3f 0xf00>;
 				mediatek,efuse-intr = <0x23>;
-				mediatek,eye-vrt = <2>;
-				mediatek,eye-vrt-host = <2>;
+				// drv add wanwen, Set the eye diagram parameters 20250709 start
+				mediatek,eye-vrt = <0x7>;
+				mediatek,eye-term = <0x6>;
+				mediatek,rev6 = <0x3>;
+				mediatek,eye-vrt-host = <0x7>;
+				mediatek,eye-term-host = <0x6>;
+                                mediatek,rev6-host = <0x3>;
+				// drv add wanwen, Set the eye diagram parameters 20250709 end
 				mediatek,discth= <0x9>;
 			};
 		};
@@ -9929,7 +9959,7 @@
 		emi-alignment = <0x100000>;
 		emi-max-addr = <0x90000000>;
 		hwid-node = <92 132 131>;
-		adie-sku = <1 1 0 0 2 2 1 0>;  /* mt6637 = 0, mt6631 = 1 , mt6631 + mt6686 = 2 */
+		adie-sku = <0 0 0 0 0 0 0 0>;  /* mt6637 = 0, mt6631 = 1 , mt6631 + mt6686 = 2 */
 	};
 
 	pda: pda@1a180000 {
@@ -11426,11 +11456,6 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 				scmi-ise = <12>;
 			};
 		};
-
-		android: android {
-			compatible = "android,firmware";
-			hardware = "mt6878";
-		};
 	};
 
 	sspm: sspm@1c300000 {
@@ -11495,6 +11520,11 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 	touch_panel0: touch-panel0 {
 		compatible = "mediatek,touch-panel";
 	};
+	/*pri N30 added by huangxinglve 20250624 begin*/
+	common_node: common_node {
+		compatible = "coosea,common_node";
+	};
+	/*pri N30 added by huangxinglve 20250624 end*/
 
 	touch_tui0: touch-tui0 {
 		compatible = "mediatek,tui_common";
@@ -11653,7 +11683,8 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 		ta-cv-ss-repeat-tmin = <25>;
 		vbat-cv = <4350>;
 		start-soc-min = <0>;
-		start-soc-max = <80>;
+		start-soc-max = <100>;
+		stop-soc-max = <100>;
 		start-vbat-max = <4300>;
 		idvchg-term = <500>;
 		idvchg-step = <50>;
@@ -11690,7 +11721,7 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 		ifod-threshold = <200>;
 		rsw-min = <20>;
 		ircmp-rbat = <40>;
-		ircmp-vclamp = <0>;
+		ircmp-vclamp = <30>;
 		vta-cap-min = <6800>;
 		vta-cap-max = <11000>;
 		ita-cap-min = <1000>;
@@ -11818,12 +11849,12 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 		bootmode = <&chosen>;
 
 		algorithm-name = "Basic";
-		charger-configuration= <0>;
+		charger-configuration= <3>;
 		alg-new-arbitration;
 
 		/* common */
-		battery-cv = <4350000>;
-		max-charger-voltage = <6500000>;
+		battery-cv = <4450000>;
+		max-charger-voltage = <10500000>;
 		vbus-sw-ovp-voltage = <15000000>;
 		min-charger-voltage = <4600000>;
 
@@ -11990,7 +12021,7 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 			vrec = <100>;
 			otg-lbp = <2800>;
 			ircmp-r = <16700>;
-			ircmp-v = <32>;
+			ircmp-v = <0>;
 			chg-tmr = <10>;
 			chg-tmr-en;
 			dcdt-sel = <600>;
@@ -12030,7 +12061,7 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 			tcpc,en-wd;
 			// tcpc,en-wd-dual-port;
 			tcpc,en-ctd;
-			tcpc,en-fod;
+			// tcpc,en-fod;
 			tcpc,en-typec-otp;
 			// tcpc,en-floatgnd;
 			wd,sbu-calib-init = <1200>;	/* mV */
@@ -12063,7 +12094,7 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 							    0x00 0x00 0x01 0x00
 							    0x00 0x00 0x00 0x00
 							    0x01 0x0b 0x01 0x0a
-							    0x0a 0x00 0x00 0x00>;
+							    0x21 0x00 0x00 0x00>;
 				pd,mfrs = "RichtekTCPC";
 
 				/*
@@ -12075,11 +12106,11 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 
 				pd,source-pdo-size = <1>;
 				pd,source-pdo-data = <0x00019096>; /* 5V, 1500 mA */
-				pd,sink-pdo-size = <1>;
-				pd,sink-pdo-data = <0x000190c8>;
+				pd,sink-pdo-size = <2>;
+				pd,sink-pdo-data = <0x000190c8 0xc0dc323c>;
 
 				/*
-				 * No DP, host + device
+				 * No DP Sink capability
 				 *	pd,id-vdo-size = <6>;
 				 *	pd,id-vdo-data = <0xd14029cf 0x0 0x63750000
 							  0x61000000 0x0 0x41000000>;
@@ -12090,7 +12121,7 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 				 */
 
 				pd,id-vdo-size = <6>;
-				pd,id-vdo-data = <0xd54029cf 0x0 0x63750000
+				pd,id-vdo-data = <0xd14029cf 0x0 0x63750000
 						  0x61000000 0x0 0x41000000>;
 
 				bat,nr = <1>;
@@ -12682,6 +12713,14 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 	regulator-always-on;
 };
 
+&mt6363_vbuck1 {
+	regulator-always-on;
+};
+
+&mt6363_vbuck2 {
+	regulator-always-on;
+};
+
 &mt6363_vbuck4 {
 	regulator-always-on;
 };
@@ -12695,6 +12734,10 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 };
 
 &mt6363_vm18 {
+	regulator-always-on;
+};
+
+&mt6363_vcn15 {
 	regulator-always-on;
 };
 
@@ -12715,6 +12758,10 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 };
 
 &mt6363_vsram_cpum {
+	regulator-always-on;
+};
+
+&mt6363_vsram_digrf {
 	regulator-always-on;
 };
 
@@ -12780,3 +12827,11 @@ TOP_LDRO7,TOP_LDRO8,TOP_LDRO9,TOP_LDRO10,TOP_LDRO11,TOP_LDRO12,TOP_LDRO13,TOP_LD
 &mt6369codec {
 	mediatek,bypass-vant18 = <1>; /* 0: do not bypass; 1: bypass */
 };
+
+//drv add fangduozhu, keys bringup, 20250428 start
+&mt6363keys {
+	home {
+		linux,keycodes = <114>;/*KEY_VOLUMEDOWN*/
+	};
+};
+//drv add fangduozhu, keys bringup, 20250428 end

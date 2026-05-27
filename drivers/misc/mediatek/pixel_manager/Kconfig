@@ -1,0 +1,6 @@
+config PRIZE_PIXEL_MANAGER
+	tristate "PRIZE_PIXEL_MANAGER for als"
+	default n
+	help
+	  If you want to use prize PRIZE_PIXEL_MANAGER, say Y or M here.
+	  If unsure, say N.

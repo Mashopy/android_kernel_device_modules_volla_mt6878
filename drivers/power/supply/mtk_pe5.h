@@ -15,7 +15,11 @@
 #define PRECISION_ENHANCE	5
 
 #define DISABLE_VBAT_THRESHOLD -1
-
+/* pri LAX10-339 add by lvyuanchuan 20240325 begin */
+#define MAX_PROFILE_TABLE		5
+#define MAX_TEMP_TABLE		    5
+#define MAX_PROPS_NAME_LEN      50
+/* pri LAX10-339 add by lvyuanchuan 20240325 end*/
 extern int pe50_get_log_level(void);
 #define PE50_DBG(fmt, ...) \
 	do { \
@@ -106,6 +110,8 @@ struct pe50_ta_auth_data {
 	u32 vta_step;
 	u32 ita_step;
 	u32 ita_gap_per_vstep;
+	/* pri LAX10-339 add by lvyuanchuan 20240325 */
+	bool cp_nums_lmt;
 };
 
 struct pe50_algo_data {
@@ -177,8 +183,29 @@ struct pe50_algo_data {
 	int input_current_limit;
 	int cv_limit;
 	u32 start_soc_max;		/* algo start soc upper bound */
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 */
+	bool is_dvchg_ieoc;
+	/*pri LAX10-882 add by lvyuanchuan 202400628*/
+	bool waiver;
+};
+/* pri LAX10-339 add by lvyuanchuan 20240325 begin */
+struct profile_t {
+	u32 voltage;
+	u32 ibatmax;
 };
 
+struct jeita_table_t {
+	int pro_nums;
+	struct profile_t profile[MAX_PROFILE_TABLE];
+};
+
+struct bat_jeita_t {
+	u32 active_table_number;
+	u32 bat_id;
+	u32 temperature_table[MAX_TEMP_TABLE];
+	struct jeita_table_t jeita_table[MAX_TEMP_TABLE];
+};
+/* pri LAX10-339 add by lvyuanchuan 20240325 end */
 /* Setting from dtsi */
 struct pe50_algo_desc {
 	u32 polling_interval;		/* polling interval */
@@ -229,6 +256,8 @@ struct pe50_algo_desc {
 	const char **support_ta;	/* supported ta name */
 	u32 support_ta_cnt;		/* supported ta count */
 	bool allow_not_check_ta_status;	/* allow not to check ta status */
+	/* pri LAX10-339 add by lvyuanchuan 20240325 */
+	struct bat_jeita_t jeita; /* battery jeita's param */
 };
 
 struct pe50_algo_info {
@@ -322,4 +351,9 @@ extern int pe50_hal_get_adc_accuracy(struct chg_alg_device *alg,
 				     enum chg_idx chgidx,
 				     enum pe50_adc_channel chan, int *val);
 extern int pe50_hal_init_chip(struct chg_alg_device *alg, enum chg_idx chgidx);
+
+extern int pe50_hal_dump_registers(struct chg_alg_device *alg, enum chg_idx chgidx);
+/* pri LAX10-445 add by lvyuanchuan 20240508*/
+extern int pe50_hal_is_enabled(struct chg_alg_device *alg, enum chg_idx chgidx,
+			   bool *en);
 #endif /* __MTK_PE5_H */

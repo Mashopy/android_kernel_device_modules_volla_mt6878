@@ -73,6 +73,27 @@ DEFINE_SPINLOCK(transceiver_fifo_lock);
 DECLARE_COMPLETION(transceiver_done);
 DEFINE_KFIFO(transceiver_fifo, uint32_t, 32);
 DEFINE_KFIFO(transceiver_super_fifo, uint32_t, 32);
+//+add by huangxinglve, 20250526, add for als calibration
+#if IS_ENABLED(CONFIG_PRIZE_PIXEL_MANAGER)
+#define SEND_LCM_PARAM_CYCLC 440
+#define LCD_NAME "lcd-backlight"
+#define MAX_RETRY_TIMES 5
+#define ALS_ENABLE_FLAG 0X88
+#define DELAY_MSECONDS 200
+
+struct sensor_lcm_param {
+	int16_t brightness;
+	int16_t data[3] __aligned(4);
+} __packed __aligned(4);
+
+static struct sensor_lcm_param lcm_param = {0};
+static struct work_struct send_lcm_param_worker;
+static struct timer_list send_lcm_param_timer;
+extern unsigned short led_level_disp_get(char *name);
+extern void get_pix_rgb(int16_t *R, int16_t *G, int16_t *B);
+extern void reset_pix_rgb(void);
+#endif
+//-add by huangxinglve, 20250526, add for als calibration
 
 static void transceiver_notify_func(struct sensor_comm_notify *n,
 		void *private_data)
@@ -224,6 +245,8 @@ static void transceiver_update_config(struct transceiver_device *dev,
 	mutex_unlock(&dev->config_lock);
 }
 
+extern uint32_t *awinic_get_global_val(void);//awinic bob add
+
 static void transceiver_report(struct transceiver_device *dev,
 		struct hf_manager_event *event)
 {
@@ -333,6 +356,18 @@ static int transceiver_translate(struct transceiver_device *dev,
 			dst->word[0] = src->value[0];
 			break;
 		default:
+			//awinic bob add start
+			if (src->sensor_type == SENSOR_TYPE_SAR) {
+				if (src->value[0] == 0xff) {
+					uint32_t *awinic_debug_data = awinic_get_global_val();
+					awinic_debug_data[0] = src->value[0];
+					awinic_debug_data[1] = src->value[1];
+					awinic_debug_data[2] = src->value[2];
+				}
+				pr_info("sar value[0]:%x,value[1]:%x,value[2]:%x",
+					src->value[0], src->value[1], src->value[2]);
+			}
+			//awinic bob add end
 			memcpy(dst->word, src->value,
 				min(sizeof(dst->word), sizeof(src->value)));
 			break;
@@ -346,6 +381,16 @@ static int transceiver_translate(struct transceiver_device *dev,
 		 * BIAS_ACTION, CALI_ACTION, TEMP_ACTION,
 		 * TEST_ACTION and RAW_ACTION
 		 */
+		 //awinic bob add start
+		if (src->sensor_type == SENSOR_TYPE_SAR) {
+			uint32_t *awinic_debug_data = awinic_get_global_val();
+			awinic_debug_data[0] = src->value[0];
+			awinic_debug_data[1] = src->value[1];
+			awinic_debug_data[2] = src->value[2];
+			pr_info("sar RAW_ACTION value[0]:%x,value[1]:%x,value[2]:%x",
+				src->value[0], src->value[1], src->value[2]);
+		}
+		//awinic bob add end
 		dst->timestamp = remap_timestamp;
 		dst->sensor_type = src->sensor_type;
 		dst->accurancy = src->accurancy;
@@ -846,7 +891,66 @@ static int transceiver_shm_super_cfg(struct share_mem_config *cfg,
 	dev->shm_super_reader.buffer_full_detect = false;
 	return share_mem_init(&dev->shm_super_reader, cfg);
 }
+//+add by huangxinglve, 20250526, add for als calibration
+#if IS_ENABLED(CONFIG_PRIZE_PIXEL_MANAGER)
+static int mtk_nanohub_send_lcm_brightness_and_rgb(void)
+{
+	int len;
+	int ret = 0;
+	int16_t R = 0;
+	int16_t G = 0;
+	int16_t B = 0;
 
+	static int16_t last_R = -1;
+	static int16_t last_G = -1;
+	static int16_t last_B = -1;
+	static int16_t last_brightness = -1;
+	struct transceiver_state *state = NULL;
+
+	state = &transceiver_dev.state[SENSOR_TYPE_LIGHT];
+	if (NULL != state && !state->enable) {
+		return 0;
+	}
+
+	get_pix_rgb(&R, &G, &B);
+
+	lcm_param.brightness = led_level_disp_get(LCD_NAME);
+	lcm_param.data[0] = R;
+	lcm_param.data[1] = G;
+	lcm_param.data[2] = B;
+
+	if (lcm_param.brightness == last_brightness && R == last_R &&
+		G == last_G && B == last_B) {
+		return 0;
+	}
+
+	pr_info("hxl_ch_als_cali2 send lcm param: %d %d %d %d\n", lcm_param.brightness, lcm_param.data[0], lcm_param.data[1], lcm_param.data[2]);
+	last_brightness = lcm_param.brightness;
+	last_R = R;
+	last_G = G;
+	last_B = B;
+	len = sizeof(lcm_param);
+	ret = transceiver_comm_with(SENSOR_TYPE_LIGHT,
+				CUST_ACTION_SET_ALS_PARAM, &lcm_param, len);
+	if (ret < 0)
+		pr_err("hxl_ch_als_cali transceiver_comm_with fail ret:%d \n", ret);
+
+	return ret;
+}
+
+static void mtk_nanohub_send_lcm_param_work(struct work_struct *work)
+{
+	(void)mtk_nanohub_send_lcm_brightness_and_rgb();
+}
+
+static void mtk_nanohub_send_lcm_param_func(struct timer_list *list)
+{
+	schedule_work(&send_lcm_param_worker);
+	mod_timer(&send_lcm_param_timer,
+		jiffies +  msecs_to_jiffies(SEND_LCM_PARAM_CYCLC));
+}
+#endif
+//-add by huangxinglve, 20250526, add for als calibration
 static int __init transceiver_init(void)
 {
 	int ret = 0;
@@ -927,6 +1031,15 @@ static int __init transceiver_init(void)
 		pr_err("timesync init fail %d\n", ret);
 		goto out_timesync_filter;
 	}
+
+	/* prize modified by huangxinglve als cali for send lcm param to light sensor 20250521 start */
+	#if IS_ENABLED(CONFIG_PRIZE_PIXEL_MANAGER)
+	INIT_WORK(&send_lcm_param_worker, mtk_nanohub_send_lcm_param_work);
+	timer_setup(&send_lcm_param_timer, mtk_nanohub_send_lcm_param_func, 0);
+	mod_timer(&send_lcm_param_timer,
+				jiffies + msecs_to_jiffies(SEND_LCM_PARAM_CYCLC));
+	#endif
+	/* prize modified by huangxinglve als cali for send lcm param to light sensor 20250521 end */
 
 	ret = register_pm_notifier(&transceiver_pm_notifier);
 	if (ret < 0) {

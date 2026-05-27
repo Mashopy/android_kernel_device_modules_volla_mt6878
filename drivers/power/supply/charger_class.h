@@ -51,6 +51,34 @@ enum {
 	CHARGER_DEV_NOTIFY_DPDM_OVP,
 };
 
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+/* wireless type */
+enum wls_type {
+	WLS_CHARGER_TYPE_UNKNOWN,
+	WLS_CHARGER_TYPE_BPP,
+	WLS_CHARGER_TYPE_EPP_10W,
+	WLS_CHARGER_TYPE_EPP_15W,
+	WLS_CHARGER_TYPE_MAX,
+};
+
+enum wls_worke_mode {
+	WLS_WORK_MODE_NONE,
+	WLS_WORK_MODE_RX,
+	WLS_WORK_MODE_TX,
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 start
+	WLS_WORK_PD_VBUS,
+//drv add wanwen,pd-vbus compatible wireless charging status 20250715 end
+};
+// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+
+// add by wanwen add battery info class 20250711 start
+enum battery_info_property {
+	BAT_INFO_PROP_MANUFACTURER_DATE,
+	BAT_INFO_PROP_ACTIVATION_DATE,
+	BAT_INFO_PROP_SOH,
+};
+// add by wanwen add battery info class 20250711 end
+
 struct charger_device {
 	struct charger_properties props;
 	struct chgdev_notify noti;
@@ -64,6 +92,17 @@ struct charger_device {
 
 enum charger_property {
 	CHARGER_PROP_BLEED_DISCHARGE,
+	// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 start
+	/* wireless */
+	CHARGER_PROP_WLS_CHG_ONLINE,
+	CHARGER_PROP_WLS_CHG_PWR,
+	CHARGER_PROP_WLS_CHG_TYPE,
+	CHARGER_PROP_WLS_MODE,
+	CHARGER_PROP_WLS_TX_ENABLE,
+	CHARGER_PROP_WLS_RX_ENABLE,
+	CHARGER_PROP_WLS_MAX_CURR_LIMIT,
+	// drv add tankaikun, apply mt5706 to mtk charger class, 20250409 end
+	CHARGER_PROP_WLS_PD_VBUS_MODE,//drv add wanwen,pd-vbus compatible wireless charging status 20250715
 };
 
 union charger_propval {

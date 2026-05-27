@@ -82,4 +82,8 @@ config LEDS_REGULATOR_VIBRATOR
 comment "Flash and Torch LED drivers"
 source "$(KCONFIG_EXT_PREFIX)drivers/leds/flash/Kconfig"
 
+# drv add fangduozhu, LRA AW86927FCR bringup, 20250425 start
+source "$(KCONFIG_EXT_PREFIX)drivers/leds/aw_haptic_hv/Kconfig"
+# drv add fangduozhu, LRA AW86927FCR bringup, 20250425 end
+
 endif # NEW_LEDS

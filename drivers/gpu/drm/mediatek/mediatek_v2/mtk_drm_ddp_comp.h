@@ -679,6 +679,9 @@ enum mtk_ddp_io_cmd {
 	/*Msync 2.0 cmd end*/
 	DUAL_TE_INIT,
 	OVL_GET_SOURCE_BPC,
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	DSI_HBM_TO_LAST_TE,
+	//drv fix hbm shining questions 20250623 sync with S50 end
 	DSI_GET_LINE_TIME_NS,
 	DSI_GET_LINE_TIME_NS_BY_MODE,
 	DSI_DUMP_LCM_INFO,

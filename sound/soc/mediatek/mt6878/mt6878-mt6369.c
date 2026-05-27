@@ -236,21 +236,69 @@ static int mt6878_compress_info_get(struct snd_kcontrol *kcontrol,
 	return ret;
 }
 
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+extern int aw87xxx_set_profile(int dev_index, char *profile);
+static char *aw_profile[] = {"Music", "Off"};
+enum aw87xxx_dev_index {
+	AW_DEV_0 = 0,
+	AW_DEV_1 = 1,
+};
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
+
 static int mt6878_mt6369_spk_amp_event(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
 					int event)
 {
 	struct snd_soc_dapm_context *dapm = w->dapm;
 	struct snd_soc_card *card = dapm->card;
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+	int ret = 0;
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
 
 	dev_info(card->dev, "%s(), event %d\n", __func__, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		/* spk amp on control */
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+		ret = aw87xxx_set_profile(AW_DEV_0, aw_profile[0]);
+		if (ret < 0) {
+			dev_info(card->dev, "%s() set AW_DEV_0 profile[%s] failed",
+			__func__, aw_profile[0]);
+			return ret;
+		}
+		ret = aw87xxx_set_profile(AW_DEV_1, aw_profile[0]);
+		if (ret < 0) {
+			dev_info(card->dev, "%s() set AW_DEV_1 profile[%s] failed",
+			__func__, aw_profile[0]);
+			return ret;
+		}
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		/* spk amp off control */
+/* begin sce drv zhangmeng add bring up audio on 20250421 */
+#if IS_ENABLED(CONFIG_SND_SOC_AW87XXX)
+		ret = aw87xxx_set_profile(AW_DEV_0, aw_profile[1]);
+		if (ret < 0) {
+			dev_info(card->dev, "%s() set AW_DEV_0 profile[%s] failed",
+			__func__, aw_profile[0]);
+			return ret;
+		}
+		ret = aw87xxx_set_profile(AW_DEV_1, aw_profile[1]);
+		if (ret < 0) {
+			dev_info(card->dev, "%s() set AW_DEV_1 profile[%s] failed",
+			__func__, aw_profile[0]);
+			return ret;
+		}
+#endif
+/* end sce drv zhangmeng add bring up audio on 20250421 */
 		break;
 	default:
 		break;

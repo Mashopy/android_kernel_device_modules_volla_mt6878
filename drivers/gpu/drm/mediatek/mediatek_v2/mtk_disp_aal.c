@@ -430,14 +430,28 @@ int led_brightness_changed_event_to_aal(struct notifier_block *nb, unsigned long
 			disp_aal_notify_backlight_changed(comp, trans_level, -1,
 				led_conf->cdev.max_brightness, 1);
 		} else {
-			trans_level = (
-				led_conf->max_hw_brightness
-				* led_conf->cdev.brightness
-				+ (led_conf->cdev.max_brightness / 2))
-				/ led_conf->cdev.max_brightness;
-			if (led_conf->cdev.brightness != 0 &&
-				trans_level == 0)
-				trans_level = 1;
+			//drv huangxinglve sync for hbm mode of The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-start
+			printk("[%d]hxl_ch_bl_aal brightness:%d !!\n", __LINE__, led_conf->cdev.brightness);
+			if(led_conf->cdev.brightness == 256) {
+				trans_level = 3765;
+				led_conf->max_hw_brightness = 4095;
+			} else if(led_conf->cdev.brightness == 257) {
+				trans_level = 3895;
+				led_conf->max_hw_brightness = 4095;
+			} else if(led_conf->cdev.brightness == 258) {
+				trans_level = 3997;
+				led_conf->max_hw_brightness = 4095;
+			} else if(led_conf->cdev.brightness == 259) {
+				trans_level = 4095;
+				led_conf->max_hw_brightness = 4095;
+			} else {
+				trans_level = (led_conf->max_hw_brightness * led_conf->cdev.brightness + (255 / 2)) / 255;
+				if (led_conf->cdev.brightness != 0 &&trans_level == 0) {
+					trans_level = 1;
+				}
+				led_conf->max_hw_brightness = 3624;//mod by huangxinglve, 20250826, mod for custom request 550nit
+			}
+			//drv huangxinglve sync for hbm mode of The sun automatically backlights to its maximum brightness-pengzhipeng-20230529-end
 
 			disp_aal_notify_backlight_changed(comp, trans_level, -1,
 				led_conf->max_hw_brightness, 1);

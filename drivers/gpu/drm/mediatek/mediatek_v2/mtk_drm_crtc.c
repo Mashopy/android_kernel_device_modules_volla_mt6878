@@ -2127,10 +2127,74 @@ int mtk_drm_aod_scp_get_dsi_ulps_wakeup_prd(struct drm_crtc *crtc)
 	return ulps_wakeup_prd;
 }
 
+//drv fix hbm shining questions 20250623 sync with S50 start
+static int mtk_drm_crtc_hbm_delay(struct drm_crtc *crtc, bool en)
+{
+	struct mtk_panel_params *panel_ext = mtk_drm_get_lcm_ext_params(crtc);
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+	struct mtk_ddp_comp *comp = mtk_ddp_comp_request_output(mtk_crtc);
+	unsigned long long wait_count = 0;
+	unsigned long long hbm_to_te = 0;
+	unsigned int vsync_time = 0;
+	unsigned int te_cycle = 0;
+	unsigned int hbm_deadline = 0;
+	unsigned int fps = 0;
+	/* 定义目标时间点 */
+	if (!(mtk_crtc->enabled)) {
+		DDPINFO("%s: skip, slept\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!(comp && comp->funcs && comp->funcs->io_cmd))
+		return -EINVAL;
+
+	if (!(panel_ext && panel_ext->vsync_time && panel_ext->hbm_deadline))
+		return -EINVAL;
+	fps = drm_mode_vrefresh(&crtc->mode);
+	te_cycle = 1000000/fps;
+	vsync_time = panel_ext->vsync_time;
+	hbm_deadline = panel_ext->hbm_deadline;
+	DDPINFO("%s:fps=%d,te=%d us,vsync=%d us,hbm_deadline=%d us\n",
+		__func__, fps, te_cycle, vsync_time, vsync_time);
+
+	comp->funcs->io_cmd(comp, NULL, DSI_HBM_TO_LAST_TE, &hbm_to_te);
+	hbm_to_te = hbm_to_te/1000;
+	if (hbm_to_te > te_cycle)
+		hbm_to_te = hbm_to_te % te_cycle;
+
+	/* 新计算逻辑：计算达到目标时间需要的等待 */
+	if (hbm_to_te < panel_ext->target_time) {
+		wait_count = panel_ext->target_time - hbm_to_te;
+	} else {
+		/* 当hbm_to_te超过目标时间时，等待到下一周期 */
+		wait_count = (te_cycle - hbm_to_te) + panel_ext->target_time;
+	}
+
+	/* 确保等待时间有效 */
+	wait_count = (wait_count > te_cycle) ? 0 : wait_count;
+
+	DDPINFO("%s, LCM hbm %s need wait %llu us, hbm_to_last_te=%llu us\n",
+		__func__,
+		en ? "enable" : "disable",
+		wait_count > 0 ? wait_count : 0,
+		hbm_to_te);
+	if (wait_count > 0) {
+		while (wait_count) {
+			mtk_drm_idlemgr_kick(__func__, crtc, 0);
+			udelay(1);
+			wait_count--;
+		}
+	}
+	return 0;
+}
+//drv fix hbm shining questions 20250623 sync with S50 end
 int mtk_drm_crtc_set_panel_hbm(struct drm_crtc *crtc, bool en)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *comp = mtk_ddp_comp_request_output(mtk_crtc);
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	struct mtk_panel_params *panel_ext = mtk_drm_get_lcm_ext_params(crtc);
+	//drv fix hbm shining questions 20250623 sync with S50 end
 	struct cmdq_pkt *cmdq_handle;
 	struct cmdq_client *client;
 	bool is_frame_mode;
@@ -2147,7 +2211,13 @@ int mtk_drm_crtc_set_panel_hbm(struct drm_crtc *crtc, bool en)
 		DDPINFO("%s: skip, slept\n", __func__);
 		return -EINVAL;
 	}
-
+	//drv Solve the problem of flashing black caused by non-synchronization of fingerprint unlocking dimlayer and hbm-20250623 sync with S50-huangxinglve-start
+	// 确保在VBlank期间执行HBM设置
+	if (!(panel_ext && panel_ext->vsync_time && panel_ext->hbm_deadline)) {
+		drm_crtc_wait_one_vblank(crtc);
+		DDPINFO("%s:set drm_crtc_wait_one_vblank\n", __func__);
+	}
+	//drv Solve the problem of flashing black caused by non-synchronization of fingerprint unlocking dimlayer and hbm-20250623 sync with S50-huangxinglve-end
 	mtk_drm_idlemgr_kick(__func__, crtc, 0);
 
 	DDPINFO("%s:set LCM hbm en:%d\n", __func__, en);
@@ -2166,6 +2236,22 @@ int mtk_drm_crtc_set_panel_hbm(struct drm_crtc *crtc, bool en)
 	}
 
 	mtk_crtc_wait_frame_done(mtk_crtc, cmdq_handle, DDP_FIRST_PATH, 0);
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	if ((panel_ext && panel_ext->vsync_time && panel_ext->hbm_deadline)) {
+		if (is_frame_mode) {
+			struct cmdq_pkt *cmdq_handle2;
+
+			cmdq_handle2 =
+				cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_CFG]);
+			mtk_crtc_wait_frame_done(mtk_crtc,
+					cmdq_handle2, DDP_FIRST_PATH, 0);
+			cmdq_pkt_flush(cmdq_handle2);
+			cmdq_pkt_destroy(cmdq_handle2);
+		} else
+			mtk_crtc_wait_frame_done(mtk_crtc,
+					cmdq_handle, DDP_FIRST_PATH, 0);
+	}
+	//drv fix hbm shining questions 20250623 sync with S50 end
 
 	if (is_frame_mode) {
 		cmdq_pkt_clear_event(cmdq_handle,
@@ -2173,6 +2259,7 @@ int mtk_drm_crtc_set_panel_hbm(struct drm_crtc *crtc, bool en)
 		cmdq_pkt_wfe(cmdq_handle,
 				mtk_crtc->gce_obj.event[EVENT_CABC_EOF]);
 	}
+	drm_crtc_wait_one_vblank(crtc);//add by huangxinglve, 20250702, wait more frame to fix setting hbm shinning
 
 	comp->funcs->io_cmd(comp, cmdq_handle, DSI_HBM_SET, &en);
 
@@ -2182,7 +2269,9 @@ int mtk_drm_crtc_set_panel_hbm(struct drm_crtc *crtc, bool en)
 		cmdq_pkt_set_event(cmdq_handle,
 				mtk_crtc->gce_obj.event[EVENT_STREAM_BLOCK]);
 	}
-
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	mtk_drm_crtc_hbm_delay(crtc, en);
+	//drv fix hbm shining questions 20250623 sync with S50 start
 	cmdq_pkt_flush(cmdq_handle);
 	cmdq_pkt_destroy(cmdq_handle);
 
@@ -7800,7 +7889,7 @@ int mtk_crtc_fill_fb_para(struct mtk_drm_crtc *mtk_crtc)
 	} else {
 		fb_info->fb_pa = fb_base;
 		fb_info->width = ALIGN_TO_32(mtk_crtc->base.mode.hdisplay);
-		fb_info->height = ALIGN_TO_32(mtk_crtc->base.mode.vdisplay);
+		fb_info->height = ALIGN_TO_32(mtk_crtc->base.mode.vdisplay) * 3;
 		fb_info->pitch = fb_info->width * 4;
 		fb_info->size = fb_info->pitch * fb_info->height;
 
@@ -16137,7 +16226,8 @@ static void msync_cmdq_cb(struct cmdq_cb_data data)
 	cmdq_pkt_destroy(cb_data->cmdq_handle);
 	kfree(cb_data);
 }
-
+//mod by huangxinglve, 20250813, mod for Eye protection mode switch color mode in hbm start
+#if 0
 static void mtk_atomic_hbm_bypass_pq(struct drm_crtc *crtc,
 		struct cmdq_pkt *handle, int en)
 {
@@ -16165,6 +16255,8 @@ static void mtk_atomic_hbm_bypass_pq(struct drm_crtc *crtc,
 		}
 	}
 }
+#endif
+//mod by huangxinglve, 20250813, mod for Eye protection mode switch color mode in hbm end
 
 #ifdef IF_ZERO /* not ready for dummy register method */
 static void sf_cmdq_cb(struct cmdq_cb_data data)
@@ -16261,9 +16353,10 @@ static void mtk_drm_crtc_atomic_flush(struct drm_crtc *crtc,
 		hbm_en = (bool)mtk_crtc_state->prop_val[CRTC_PROP_HBM_ENABLE];
 		mtk_drm_crtc_set_panel_hbm(crtc, hbm_en);
 		mtk_drm_crtc_hbm_wait(crtc, hbm_en);
-
-		if (!mtk_crtc_state->prop_val[CRTC_PROP_DOZE_ACTIVE])
-			mtk_atomic_hbm_bypass_pq(crtc, cmdq_handle, hbm_en);
+		//mod by huangxinglve, 20250813, mod for Eye protection mode switch color mode in hbm start
+		//if (!mtk_crtc_state->prop_val[CRTC_PROP_DOZE_ACTIVE])
+		//	mtk_atomic_hbm_bypass_pq(crtc, cmdq_handle, hbm_en);
+		//mod by huangxinglve, 20250813, mod for Eye protection mode switch color mode in hbm end
 	}
 
 	hdr_en = (bool)mtk_crtc_state->prop_val[CRTC_PROP_HDR_ENABLE];

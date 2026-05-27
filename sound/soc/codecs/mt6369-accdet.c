@@ -709,6 +709,16 @@ static u32 accdet_get_auxadc(void)
 	return vol;
 }
 
+//przie-add fsa4480-pengzhipeng-20230207-start
+#if IS_ENABLED(CONFIG_TYPEC_AUDIO_FSA4480_SWITCH)
+u32 accdet_auxadc_get_val(void)
+{
+    return accdet_get_auxadc();                                                                                                                                                                                                                                               
+}
+EXPORT_SYMBOL_GPL(accdet_auxadc_get_val);
+#endif
+//przie-add fsa4480-pengzhipeng-20230207-end
+
 static void accdet_get_efuse(void)
 {
 	unsigned short efuseval = 0;
@@ -3176,6 +3186,30 @@ static int mt6369_accdet_remove(struct platform_device *pdev)
 	devm_kfree(&pdev->dev, accdet);
 	return 0;
 }
+
+/* prize added for tcpc analog switch hl5280 support */
+#if IS_ENABLED(CONFIG_TYPEC_AUDIO_FSA4480_SWITCH)
+void accdet_eint_func_extern(int state) {
+	int ret = 0;
+
+	if (state == EINT_PLUG_OUT) { //OUT=0 IN=1
+		accdet->cur_eint_state = EINT_PLUG_OUT;
+		accdet_write(0x250a, (accdet_read(0x250a)|0x4));
+		mdelay(5);
+	} else {
+		accdet->cur_eint_state = EINT_PLUG_IN;
+		accdet_write(0x250a, (accdet_read(0x250a)&0xFB));
+		mdelay(5);
+	}
+
+	pr_info("accdet %s(), cur_eint_state=%d\n", __func__, accdet->cur_eint_state);
+	ret = queue_work(accdet->eint_workqueue, &accdet->eint_work);
+
+	return;
+}
+EXPORT_SYMBOL(accdet_eint_func_extern);
+#endif
+//prize added by huarui, headset support, 20190111-end
 
 static struct platform_driver mt6369_accdet_driver = {
 	.probe = mt6369_accdet_probe,

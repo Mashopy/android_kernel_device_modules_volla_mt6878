@@ -1071,7 +1071,9 @@ struct mtk_drm_crtc {
 	struct task_struct *cwb_task;
 	wait_queue_head_t cwb_wq;
 	atomic_t cwb_task_active;
-
+	//drv fix hbm shining questions 20250623 sync with S50 start
+	unsigned long long last_te_time;
+	//drv fix hbm shining questions 20250623 sync with S50 end
 	ktime_t pf_time;
 	ktime_t sof_time;
 	spinlock_t pf_time_lock;

@@ -7,6 +7,11 @@
 #include "mtk_charger.h"
 #include "mtk_pe5.h"
 
+/* pri LAX10-339 add by lvyuanchuan 20240325 begin */
+#define PE50_VBUS_OVP	    (11000000)
+#define PE50_CP_NUMS_LMT    (3000)
+/* pri LAX10-339 add by lvyuanchuan 20240325 end */
+
 enum mtk_chg_type {
 	MTK_CHGTYP_SWCHG = 0,
 	MTK_CHGTYP_DVCHG,
@@ -46,6 +51,7 @@ struct pe50_hal {
 	const char **support_ta;
 	int support_ta_cnt;
 	struct power_supply *bat_psy;
+	struct power_supply *bat_manager_psy;
 };
 
 static inline int to_chgtyp(enum chg_idx idx)
@@ -198,6 +204,13 @@ int pe50_hal_authenticate_ta(struct chg_alg_device *alg,
 			PE50_DBG("authenticate fail(%d)\n", ret);
 			continue;
 		}
+		/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+		_data.support_meas_cap = false;
+		if ( _data.ita_max <= PE50_CP_NUMS_LMT)
+			data->cp_nums_lmt = true;
+		else
+			data->cp_nums_lmt = false;
+		/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 		hal->adapter = hal->adapters[i];
 		data->vta_min = _data.vta_min;
 		data->vta_max = _data.vta_max;
@@ -210,11 +223,12 @@ int pe50_hal_authenticate_ta(struct chg_alg_device *alg,
 		data->vta_step = _data.vta_step;
 		data->ita_step = _data.ita_step;
 		data->ita_gap_per_vstep = _data.ita_gap_per_vstep;
-		PE50_INFO("lmt(%d,%dW),step(%d,%d),cc=%d,cap=%d,status=%d\n",
+		PE50_INFO("lmt(%d,%dW),step(%d,%d),cc=%d,cap=%d,status=%d,ita_max=%d\n",
 			  data->pwr_lmt, data->pdp, data->vta_step,
 			  data->ita_step, data->support_cc,
 			  data->support_meas_cap,
-			  data->support_status);
+			  data->support_status,
+			  data->ita_max);
 		return 0;
 	}
 	return -EINVAL;
@@ -283,7 +297,11 @@ int pe50_hal_init_hardware(struct chg_alg_device *alg, const char **support_ta,
 		data->is_dvchg_exist[PE50_DVCHG_SLAVE] = true;
 	chg_alg_dev_set_drv_hal_data(alg, hal);
 	hal->dev = info->dev;
-	hal->bat_psy = devm_power_supply_get_by_phandle(hal->dev, "gauge");
+
+	/* pri P501-charger modify by suwenwei 20241216 start */
+	hal->bat_psy = power_supply_get_by_name("battery");
+	//hal->bat_psy = devm_power_supply_get_by_phandle(hal->dev, "gauge");
+	/* pri P501-charger modify by suwenwei 20241216 end */
 	if (IS_ERR_OR_NULL(hal->bat_psy)) {
 		ret = IS_ERR(hal->bat_psy) ? PTR_ERR(hal->bat_psy) : -ENODEV;
 		PE50_ERR("get bat_psy fail(%d)\n", ret);
@@ -296,7 +314,10 @@ err:
 
 int pe50_hal_enable_sw_vbusovp(struct chg_alg_device *alg, bool en)
 {
-	mtk_chg_enable_vbus_ovp(en);
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 begin */
+	//mtk_chg_enable_vbus_ovp(en);
+	mtk_chg_set_vbus_ovp(en, PE5_ID ,PE50_VBUS_OVP);
+	/* pri LAX10-339 modify by lvyuanchuan 20240325 end */
 	return 0;
 }
 
@@ -418,20 +439,26 @@ int pe50_hal_reset_vbusovp_alarm(struct chg_alg_device *alg,
 static int pe50_get_tbat(struct pe50_hal *hal)
 {
 	int ret = 27;
-	union power_supply_propval val = {0,};
+	union power_supply_propval prop = {0};
+	struct power_supply *bat_manager_psy = NULL;
 
-	if (IS_ERR_OR_NULL(hal->bat_psy))
-		goto out;
-
-	ret = power_supply_get_property(hal->bat_psy, POWER_SUPPLY_PROP_TEMP,
-					&val);
-	if (ret < 0) {
-		PE50_ERR("get tbat fail(%d)\n", ret);
-		ret = 27;
-		goto out;
+	bat_manager_psy = hal->bat_manager_psy;
+	if (IS_ERR_OR_NULL(bat_manager_psy)) {
+		pr_notice("%s retry to get pe5->bat_manager_psy\n", __func__);
+		bat_manager_psy = power_supply_get_by_name("battery");
+		hal->bat_manager_psy = bat_manager_psy;
 	}
-	ret = val.intval / 10;
-out:
+
+	if (IS_ERR_OR_NULL(bat_manager_psy)) {
+		pr_notice("%s Couldn't get bat_manager_psy\n", __func__);
+		ret = 27;
+	} else {
+		ret = power_supply_get_property(bat_manager_psy,
+			POWER_SUPPLY_PROP_TEMP, &prop);
+		if (ret < 0)
+			return ret;
+		ret = prop.intval / 10;
+	}
 	PE50_DBG("%d\n", ret);
 	return ret;
 }
@@ -440,6 +467,13 @@ static int pe50_get_ibat(struct pe50_hal *hal)
 {
 	int ret = 0;
 	union power_supply_propval val = {0,};
+
+	/* pri ERNPGL-3130 modify by suwenwei 20240111 start */
+	if (IS_ERR_OR_NULL(hal->bat_psy)) {
+		hal->bat_psy = power_supply_get_by_name("battery");
+		PE50_ERR("retry get bat_psy\n");
+	}
+	/* pri ERNPGL-3130 modify by suwenwei 20240111 end */
 
 	if (IS_ERR_OR_NULL(hal->bat_psy))
 		goto out;
@@ -492,6 +526,13 @@ int pe50_hal_get_soc(struct chg_alg_device *alg, u32 *soc)
 	int ret = -EOPNOTSUPP;
 	union power_supply_propval val = {0,};
 	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	/* pri ERNPGL-3130 modify by suwenwei 20240111 start */
+	if (IS_ERR_OR_NULL(hal->bat_psy)) {
+		hal->bat_psy = power_supply_get_by_name("battery");
+		PE50_ERR("retry get bat_psy\n");
+	}
+	/* pri ERNPGL-3130 modify by suwenwei 20240111 end */
 
 	if (IS_ERR_OR_NULL(hal->bat_psy))
 		goto out;
@@ -624,7 +665,18 @@ int pe50_hal_get_adc_accuracy(struct chg_alg_device *alg, enum chg_idx chgidx,
 		*val = micro_to_milli(*val);
 	return 0;
 }
+/* pri LAX10-445 add by lvyuanchuan 20240508 begin */
+int pe50_hal_is_enabled(struct chg_alg_device *alg, enum chg_idx chgidx,
+			   bool *en)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
 
+	if (chgtyp < 0)
+		return chgtyp;
+	return charger_dev_is_enabled(hal->chgdevs[chgtyp], en);
+}
+/* pri LAX10-445 add by lvyuanchuan 20240508 end */
 int pe50_hal_init_chip(struct chg_alg_device *alg, enum chg_idx chgidx)
 {
 	int chgtyp = to_chgtyp(chgidx);
@@ -634,3 +686,15 @@ int pe50_hal_init_chip(struct chg_alg_device *alg, enum chg_idx chgidx)
 		return chgtyp;
 	return charger_dev_init_chip(hal->chgdevs[chgtyp]);
 }
+
+/* pri x91daria-chg modify by suwenwei 20250225 start */
+int pe50_hal_dump_registers(struct chg_alg_device *alg, enum chg_idx chgidx)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pe50_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	if (chgtyp < 0)
+		return chgtyp;
+	return charger_dev_dump_registers(hal->chgdevs[chgtyp]);
+}
+/* pri x91daria-chg modify by suwenwei 20250225 end */
