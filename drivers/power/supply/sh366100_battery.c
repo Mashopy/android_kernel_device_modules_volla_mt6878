@@ -1491,6 +1491,10 @@ static s32 fg_get_property(struct power_supply* psy, enum power_supply_property 
 		}
 	*/
 
+	int health_factor = 0;
+	int charge_full_design_uah = 5300000;
+	int charge_full_estimated_uah = 0;
+
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = fg_get_batt_status(sm);
@@ -1540,7 +1544,17 @@ static s32 fg_get_property(struct power_supply* psy, enum power_supply_property 
 #if IS_ADC_HIGHFREQ
 		fg_read_fcc(sm);
 #endif
-		val->intval = sm->batt_fcc;
+		// Health factor degration is 0.0375% per cycle for Li-Poly batteries, fallback
+		// to 0 for heavily degraded batteries due to long-term use or harsh conditions.
+		health_factor = 1000000 - (sm->batt_soc_cycle * 375);
+		if (health_factor < 0) {
+			health_factor = 0;
+		}
+
+		// Cast to long long to prevent overflow during multiplication, then apply the health factor
+		// and divide by 1,000,000 to get the estimated full charge capacity in microampere-hours (uAh).
+		charge_full_estimated_uah = (int)( ((long long)charge_full_design_uah * health_factor) / 1000000 );
+		val->intval = charge_full_estimated_uah;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
