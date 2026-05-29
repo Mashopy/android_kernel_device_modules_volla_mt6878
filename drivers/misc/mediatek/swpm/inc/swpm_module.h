@@ -18,8 +18,12 @@
  ****************************************************************************/
 #define IDD_TBL_DBG
 
+#ifndef MIN
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
+#endif
+#ifndef MAX
 #define MIN(a, b)			((a) >= (b) ? (b) : (a))
+#endif
 
 #define SWPM_OPS (swpm_m.plat_ops)
 
