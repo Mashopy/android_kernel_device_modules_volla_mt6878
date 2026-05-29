@@ -31,11 +31,7 @@
 
 
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#else
 #include <linux/notifier.h>
-#endif
 
 #ifdef CONFIG_OF
 #include <linux/of.h>
@@ -68,6 +64,8 @@
 #include "teei_fp.h"
 // prize baibo for beapod tee end
 #endif
+
+#include "mtk_disp_notify.h"
 
 /* MTK header */
 //#include "mt_spi.h"
@@ -644,66 +642,35 @@ static int gf_netlink_destroy(struct gf_device *gf_dev)
 /* -------------------------------------------------------------------- */
 /* early suspend callback and suspend/resume functions          */
 /* -------------------------------------------------------------------- */
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void gf_early_suspend(struct early_suspend *handler)
-{
-	struct gf_device *gf_dev = NULL;
-
-	gf_dev = container_of(handler, struct gf_device, early_suspend);
-	gf_debug(INFO_LOG, "[%s] enter\n", __func__);
-
-	gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_OFF);
-}
-
-static void gf_late_resume(struct early_suspend *handler)
-{
-	struct gf_device *gf_dev = NULL;
-
-	gf_dev = container_of(handler, struct gf_device, early_suspend);
-	gf_debug(INFO_LOG, "[%s] enter\n", __func__);
-
-	gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_ON);
-}
-#else
-
 static int gf_fb_notifier_callback(struct notifier_block *self,
 			unsigned long event, void *data)
 {
-	struct gf_device *gf_dev = NULL;
-	struct fb_event *evdata = data;
-	unsigned int blank;
-	int retval = 0;
-	FUNC_ENTRY();
+    struct gf_device *gf_dev = NULL;
+    int *blank = data;
+    int retval = 0;
+    FUNC_ENTRY();
 
-	/* If we aren't interested in this event, skip it immediately ... */
-	if (event != FB_EVENT_BLANK /* FB_EARLY_EVENT_BLANK */)
-		return 0;
+    if (event != MTK_DISP_EVENT_BLANK)
+        return 0;
 
-	gf_dev = container_of(self, struct gf_device, notifier);
-	blank = *(int *)evdata->data;
+    gf_dev = container_of(self, struct gf_device, notifier);
 
-	gf_debug(INFO_LOG, "[%s] : enter, blank=0x%x\n", __func__, blank);
-
-	switch (blank) {
-	case FB_BLANK_UNBLANK:
-		gf_debug(INFO_LOG, "[%s] : lcd on notify\n", __func__);
-		gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_ON);
-		break;
-
-	case FB_BLANK_POWERDOWN:
-		gf_debug(INFO_LOG, "[%s] : lcd off notify\n", __func__);
-		gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_OFF);
-		break;
-
-	default:
-		gf_debug(INFO_LOG, "[%s] : other notifier, ignore\n", __func__);
-		break;
-	}
-	FUNC_EXIT();
-	return retval;
+    switch (*blank) {
+    case MTK_DISP_BLANK_UNBLANK:
+        gf_debug(INFO_LOG, "[%s] : lcd on notify\n", __func__);
+        gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_ON);
+        break;
+    case MTK_DISP_BLANK_POWERDOWN:
+        gf_debug(INFO_LOG, "[%s] : lcd off notify\n", __func__);
+        gf_netlink_send(gf_dev, GF_NETLINK_SCREEN_OFF);
+        break;
+    default:
+        gf_debug(INFO_LOG, "[%s] : other notifier, ignore\n", __func__);
+        break;
+    }
+    FUNC_EXIT();
+    return retval;
 }
-
-#endif /* CONFIG_HAS_EARLYSUSPEND */
 
 /* -------------------------------------------------------------------- */
 /* file operation function                                              */
@@ -863,17 +830,9 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		gf_dev->irq_count = 1;
 		gf_disable_irq(gf_dev);
 
-#if defined(CONFIG_HAS_EARLYSUSPEND)
-		gf_debug(INFO_LOG, "[%s] : register_early_suspend\n", __func__);
-		gf_dev->early_suspend.level = (EARLY_SUSPEND_LEVEL_DISABLE_FB - 1);
-		gf_dev->early_suspend.suspend = gf_early_suspend,
-		gf_dev->early_suspend.resume = gf_late_resume,
-		register_early_suspend(&gf_dev->early_suspend);
-#else
 		/* register screen on/off callback */
 		gf_dev->notifier.notifier_call = gf_fb_notifier_callback;
-		fb_register_client(&gf_dev->notifier);
-#endif
+		mtk_disp_notifier_register("goodix-fp", &gf_dev->notifier);
 
 		gf_dev->sig_count = 0;
 		gf_dev->system_status = 1;
@@ -902,12 +861,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			gf_dev->irq = 0;
 		}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-		if (gf_dev->early_suspend.suspend)
-			unregister_early_suspend(&gf_dev->early_suspend);
-#else
-		fb_unregister_client(&gf_dev->notifier);
-#endif
+		mtk_disp_notifier_unregister(&gf_dev->notifier);
 
 		gf_dev->system_status = 0;
 		gf_debug(INFO_LOG, "%s: gf exit finished ======\n", __func__);
@@ -1237,17 +1191,9 @@ static ssize_t gf_debug_store(struct device *dev,
 		gf_dev->irq_count = 1;
 		gf_disable_irq(gf_dev);
 
-#if defined(CONFIG_HAS_EARLYSUSPEND)
-		gf_debug(INFO_LOG, "[%s] : register_early_suspend\n", __func__);
-		gf_dev->early_suspend.level = (EARLY_SUSPEND_LEVEL_DISABLE_FB - 1);
-		gf_dev->early_suspend.suspend = gf_early_suspend,
-		gf_dev->early_suspend.resume = gf_late_resume,
-		register_early_suspend(&gf_dev->early_suspend);
-#else
 		/* register screen on/off callback */
 		gf_dev->notifier.notifier_call = gf_fb_notifier_callback;
-		fb_register_client(&gf_dev->notifier);
-#endif
+		mtk_disp_notifier_register("goodix-fp", &gf_dev->notifier);
 
 		gf_dev->sig_count = 0;
 
@@ -2110,12 +2056,7 @@ static void gf_remove(struct spi_device *spi)
 		gf_dev->irq = 0;
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	if (gf_dev->early_suspend.suspend)
-		unregister_early_suspend(&gf_dev->early_suspend);
-#else
-	fb_unregister_client(&gf_dev->notifier);
-#endif
+	mtk_disp_notifier_unregister(&gf_dev->notifier);
 
 	mutex_lock(&gf_dev->release_lock);
 	if (gf_dev->input == NULL) {

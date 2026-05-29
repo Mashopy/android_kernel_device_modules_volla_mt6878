@@ -16,6 +16,7 @@ subdir-ccflags-y += -I$(srctree)/drivers/spi/mediatek/$(MTK_PLATFORM)
 include $(DEVICE_MODULES_PATH)/drivers/tee/teei/Makefile.include
 endif
 # for microtrust tee end
+ccflags-$(CONFIG_DRM_MEDIATEK_V2) += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
 
 obj-$(CONFIG_GOODIX_GW9518_FINGERPRINT)	+= gf_tee.o
 #gf_tee-y := gf_spi_tee.o gf_spi_factory.o

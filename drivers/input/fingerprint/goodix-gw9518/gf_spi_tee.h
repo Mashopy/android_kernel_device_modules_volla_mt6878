@@ -6,11 +6,7 @@
 #include <linux/cdev.h>
 #include <linux/input.h>
 //#include "mt_spi.h"
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#else
 #include <linux/notifier.h>
-#endif
 
 /**************************debug******************************/
 #define ERR_LOG  (0)
@@ -180,11 +176,7 @@ struct gf_device {
 	/* for netlink use */
 	struct sock *nl_sk;
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend early_suspend;
-#else
 	struct notifier_block notifier;
-#endif
 
 	u8 probe_finish;
 	u8 irq_count;
