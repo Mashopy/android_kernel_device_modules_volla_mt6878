@@ -2831,7 +2831,7 @@
 		compatible = "mediatek,disp-conn-leds";
 		backlight {
 			label = "lcd-backlight";
-			max-brightness = <259>;
+			max-brightness = <255>;
 			min-brightness = <4>;
 			max-hw-brightness = <4095>;
 			led-mode = <4>;
@@ -5800,7 +5800,7 @@
 				<1>, /*MTK_DRM_OPT_RPO*/
 				<0>, /*MTK_DRM_OPT_DUAL_PIPE*/
 				<0>, /*MTK_DRM_OPT_DC_BY_HRT*/
-				<0>, /*MTK_DRM_OPT_OVL_WCG*/
+				<1>, /*MTK_DRM_OPT_OVL_WCG*/
 				<0>, /*MTK_DRM_OPT_OVL_SBCH*/
 				<1>, /*MTK_DRM_OPT_COMMIT_NO_WAIT_VBLANK*/
 				<0>, /*MTK_DRM_OPT_MET*/
